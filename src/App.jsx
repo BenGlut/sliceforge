@@ -14,11 +14,11 @@ export default function App() {
   const canvasRef = useRef(null)
   const viewerRef = useRef(null)
   const fileRef = useRef(null)
-  const [showPlane, setShowPlane] = useState(true)
   const [uniformScale, setUniformScale] = useState(true)
 
-  const [gizmoOn, setGizmoOn] = useState(true)
-  const [volumeOn, setVolumeOn] = useState(false)
+  // CAD-style tooling: gizmos belong to an active tool, nothing is shown by
+  // default. Esc leaves the tool.
+  const [activeTool, setActiveTool] = useState(null) // null | 'rotate' | 'volume'
   const [volumeMode, setVolumeMode] = useState('translate')
 
   useEffect(() => {
@@ -35,12 +35,19 @@ export default function App() {
   }, [s.pieces])
 
   useEffect(() => {
-    viewerRef.current?.setGizmo(gizmoOn && !volumeOn && s.pieces.length > 0)
-  }, [gizmoOn, volumeOn, s.pieces])
+    viewerRef.current?.setGizmo(activeTool === 'rotate' && s.pieces.length > 0)
+  }, [activeTool, s.pieces])
 
   useEffect(() => {
-    viewerRef.current?.setVolumeBox(volumeOn && s.pieces.length > 0)
-  }, [volumeOn, s.pieces.length > 0])
+    viewerRef.current?.setVolumeBox(activeTool === 'volume' && s.pieces.length > 0)
+  }, [activeTool, s.pieces.length > 0])
+
+  useEffect(() => {
+    if (!activeTool) return
+    const onKey = (e) => e.key === 'Escape' && setActiveTool(null)
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [activeTool])
 
   useEffect(() => {
     viewerRef.current?.setVolumeMode(volumeMode)
@@ -80,7 +87,7 @@ export default function App() {
   useEffect(() => {
     const viewer = viewerRef.current
     if (!viewer) return
-    if (!showPlane || !s.pieces.length) {
+    if (activeTool !== 'plane' || !s.pieces.length) {
       viewer.hidePlane()
       return
     }
@@ -92,7 +99,7 @@ export default function App() {
     })
     const size = box.isEmpty() ? 100 : box.getSize(new THREE.Vector3()).length()
     viewer.showPlane(normal, origin, size)
-  }, [s.plane, s.pieces, showPlane])
+  }, [s.plane, s.pieces, activeTool])
 
   async function onFiles(files) {
     const file = files?.[0]
@@ -216,6 +223,23 @@ export default function App() {
       <div className="main">
         <div className="canvas-wrap">
           <canvas ref={canvasRef} />
+          {s.pieces.length > 0 && (
+            <div className="viewport-toolbar">
+              {[
+                ['plane', '✂️', t('planeCut')],
+                ['volume', '📦', t('volumeCut')],
+                ['rotate', '🔄', t('modeRotate')]
+              ].map(([tool, icon, label]) => (
+                <button
+                  key={tool}
+                  className={activeTool === tool ? 'active' : ''}
+                  onClick={() => setActiveTool(activeTool === tool ? null : tool)}
+                >
+                  <span aria-hidden="true">{icon}</span> {label}
+                </button>
+              ))}
+            </div>
+          )}
           {!s.pieces.length && <div className="drop-hint">{t('dropHint')}</div>}
           {s.busy && <div className="busy">{t('cutting')}</div>}
           {s.error && (
@@ -280,14 +304,6 @@ export default function App() {
                 />
                 {t('uniform')}
               </label>
-              <label className="inline">
-                <input
-                  type="checkbox"
-                  checked={gizmoOn}
-                  onChange={(e) => setGizmoOn(e.target.checked)}
-                />
-                {t('gizmo')}
-              </label>
               <div className="dims">{t('triangles', { n: Math.round(triCount).toLocaleString() })}</div>
               <div className="simplify-row">
                 <input
@@ -318,18 +334,10 @@ export default function App() {
               </label>
             </section>
 
+            {activeTool === 'plane' && (
+            <>
             <section>
-              <h3>
-                {t('planeCut')}
-                <label className="inline">
-                  <input
-                    type="checkbox"
-                    checked={showPlane}
-                    onChange={(e) => setShowPlane(e.target.checked)}
-                  />
-                  👁
-                </label>
-              </h3>
+              <h3>{t('planeCut')}</h3>
               <label>
                 {t('axis')}
                 <div className="axis-row">
@@ -445,41 +453,32 @@ export default function App() {
               </button>
               {s.history.length > 0 && <button onClick={s.undo}>{t('undo')}</button>}
             </section>
+            </>
+            )}
 
-            <section>
-              <h3>
-                {t('volumeCut')}
-                <label className="inline">
-                  <input
-                    type="checkbox"
-                    checked={volumeOn}
-                    onChange={(e) => setVolumeOn(e.target.checked)}
-                  />
-                </label>
-              </h3>
-              {volumeOn && (
-                <>
-                  <div className="axis-row">
-                    {[
-                      ['translate', t('modeMove')],
-                      ['rotate', t('modeRotate')],
-                      ['scale', t('modeScale')]
-                    ].map(([mode, label]) => (
-                      <button
-                        key={mode}
-                        className={volumeMode === mode ? 'active' : ''}
-                        onClick={() => setVolumeMode(mode)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <button className="primary" disabled={s.busy} onClick={onVolumeCut}>
-                    {s.busy ? t('cutting') : t('detach')}
-                  </button>
-                </>
-              )}
-            </section>
+            {activeTool === 'volume' && (
+              <section>
+                <h3>{t('volumeCut')}</h3>
+                <div className="axis-row">
+                  {[
+                    ['translate', t('modeMove')],
+                    ['rotate', t('modeRotate')],
+                    ['scale', t('modeScale')]
+                  ].map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      className={volumeMode === mode ? 'active' : ''}
+                      onClick={() => setVolumeMode(mode)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button className="primary" disabled={s.busy} onClick={onVolumeCut}>
+                  {s.busy ? t('cutting') : t('detach')}
+                </button>
+              </section>
+            )}
 
             <section>
               <h3>

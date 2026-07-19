@@ -35,6 +35,15 @@ button.lang { padding: 6px 8px; }
 .canvas-wrap { flex: 1; position: relative; min-width: 0; }
 .canvas-wrap canvas { width: 100%; height: 100%; display: block; }
 
+.viewport-toolbar {
+  position: absolute; top: 12px; left: 12px;
+  display: flex; gap: 6px;
+}
+.viewport-toolbar button {
+  background: rgba(27, 30, 39, 0.88); backdrop-filter: blur(4px);
+}
+.viewport-toolbar button.active { background: #3d6ef7; border-color: #3d6ef7; }
+
 .drop-hint, .busy {
   position: absolute; inset: 0;
   display: grid; place-items: center;

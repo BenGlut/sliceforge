@@ -41,6 +41,10 @@ src/
 ```
 
 Key invariants:
+- **Tool-based UI (CAD standard)**: plane helper, volume box and rotation
+  rings are TOOLS in the viewport toolbar — exactly one active at a time,
+  nothing shown by default, Esc leaves the tool, each tool brings its own
+  sidebar sections. Never add an always-visible overlay to the scene.
 - Geometry transforms (rotate/resize) are **baked into the BufferGeometry**;
   meshes/groups stay at identity except during gizmo preview and explode.
 - All booleans go through Manifold; **weld with `mesh.merge()` in WASM**, never
