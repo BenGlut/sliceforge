@@ -68,6 +68,12 @@ export const useStore = create((set) => ({
       return { pieces, history }
     }),
 
+  rotateModelQuaternion: (q) =>
+    set((s) => {
+      transformPieces(s.pieces, () => new THREE.Matrix4().makeRotationFromQuaternion(q))
+      return { pieces: [...s.pieces], history: [] }
+    }),
+
   rotateModel: (axis, deg) =>
     set((s) => {
       const rad = THREE.MathUtils.degToRad(deg)

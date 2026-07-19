@@ -16,15 +16,24 @@ export default function App() {
   const [showPlane, setShowPlane] = useState(true)
   const [uniformScale, setUniformScale] = useState(true)
 
+  const [gizmoOn, setGizmoOn] = useState(true)
+
   useEffect(() => {
     const viewer = new Viewer(canvasRef.current)
+    viewer.onRotateEnd = (q) => useStore.getState().rotateModelQuaternion(q)
+    if (import.meta.env.DEV) window.__sfViewer = viewer
     viewerRef.current = viewer
     return () => viewer.dispose()
   }, [])
 
+
   useEffect(() => {
     viewerRef.current?.setPieces(s.pieces, s.explode)
   }, [s.pieces])
+
+  useEffect(() => {
+    viewerRef.current?.setGizmo(gizmoOn && s.pieces.length > 0)
+  }, [gizmoOn, s.pieces])
 
   useEffect(() => {
     viewerRef.current?.setExplode(s.explode)
@@ -209,6 +218,14 @@ export default function App() {
                   onChange={(e) => setUniformScale(e.target.checked)}
                 />
                 {t('uniform')}
+              </label>
+              <label className="inline">
+                <input
+                  type="checkbox"
+                  checked={gizmoOn}
+                  onChange={(e) => setGizmoOn(e.target.checked)}
+                />
+                {t('gizmo')}
               </label>
               <label>
                 {t('rotation')}

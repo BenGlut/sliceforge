@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { TransformControls } from 'three/addons/controls/TransformControls.js'
 
 const PIECE_COLORS = [0x5b8dee, 0xee8a5b, 0x62c48a, 0xd46bc8, 0xe0c34f, 0x6bd4cf, 0x9a7be4]
 
@@ -29,6 +30,24 @@ export class Viewer {
     this.scene.add(this.piecesGroup)
     this.planeHelper = null
     this.modelCenter = new THREE.Vector3()
+
+    // In-view rotation wheel: drag a ring, the whole model rotates live around
+    // its centre; on release the rotation is baked into the geometries.
+    this.onRotateEnd = null
+    this.pivot = new THREE.Object3D()
+    this.scene.add(this.pivot)
+    this.gizmo = new TransformControls(this.camera, canvas)
+    this.gizmo.setMode('rotate')
+    this.gizmo.setSize(1.15)
+    this.gizmo.setRotationSnap(THREE.MathUtils.degToRad(5))
+    this.gizmoHelper = this.gizmo.getHelper()
+    this.gizmoHelper.visible = false
+    this.scene.add(this.gizmoHelper)
+    this.gizmo.addEventListener('objectChange', () => this._applyPivotPreview())
+    this.gizmo.addEventListener('dragging-changed', (e) => {
+      this.controls.enabled = !e.value
+      if (!e.value) this._bakeGizmoRotation()
+    })
 
     this._raf = 0
     const loop = () => {
@@ -69,6 +88,7 @@ export class Viewer {
       this.piecesGroup.add(mesh)
     })
     this.setExplode(explode)
+    if (this.gizmoHelper.visible) this.pivot.position.copy(this.modelCenter)
 
     if (!box.isEmpty() && pieces.length === 1) {
       const size = box.getSize(new THREE.Vector3()).length()
@@ -87,6 +107,33 @@ export class Viewer {
       mesh.geometry.boundingBox.getCenter(c).sub(this.modelCenter)
       mesh.position.copy(c.multiplyScalar(factor))
     }
+  }
+
+  setGizmo(enabled) {
+    if (enabled && this.piecesGroup.children.length) {
+      this.pivot.position.copy(this.modelCenter)
+      this.pivot.quaternion.identity()
+      this.gizmo.attach(this.pivot)
+      this.gizmoHelper.visible = true
+    } else {
+      this.gizmo.detach()
+      this.gizmoHelper.visible = false
+    }
+  }
+
+  _applyPivotPreview() {
+    const q = this.pivot.quaternion
+    const c = this.pivot.position
+    this.piecesGroup.quaternion.copy(q)
+    this.piecesGroup.position.copy(c).sub(c.clone().applyQuaternion(q))
+  }
+
+  _bakeGizmoRotation() {
+    const q = this.pivot.quaternion.clone()
+    this.piecesGroup.position.set(0, 0, 0)
+    this.piecesGroup.quaternion.identity()
+    this.pivot.quaternion.identity()
+    if (q.angleTo(new THREE.Quaternion()) > 1e-4) this.onRotateEnd?.(q)
   }
 
   showPlane(normal, origin, size) {
