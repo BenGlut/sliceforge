@@ -33,16 +33,30 @@ function piecesToScene(pieces, zUp = false) {
   return scene
 }
 
-export function exportSTL(pieces, modelName) {
+// Browsers block a burst of downloads: one piece downloads directly, several
+// pieces are bundled into a single zip.
+export function stlPieceBlobs(pieces) {
   const exporter = new STLExporter()
-  pieces.forEach((p, i) => {
+  return pieces.map((p) => {
     const mesh = new THREE.Mesh(toZUpGeometry(p.geometry), new THREE.MeshStandardMaterial())
-    const data = exporter.parse(mesh, { binary: true })
-    download(
-      new Blob([data], { type: 'model/stl' }),
-      `${baseName(modelName)}_${String(i + 1).padStart(2, '0')}.stl`
-    )
+    const parsed = exporter.parse(mesh, { binary: true })
+    return {
+      name: `${p.name.replace(/\.[^.]+$/, '')}.stl`,
+      data: parsed instanceof DataView ? parsed.buffer : parsed
+    }
   })
+}
+
+export async function exportSTL(pieces, modelName) {
+  const blobs = stlPieceBlobs(pieces)
+  if (blobs.length === 1) {
+    download(new Blob([blobs[0].data], { type: 'model/stl' }), blobs[0].name)
+    return
+  }
+  const zip = new JSZip()
+  for (const b of blobs) zip.file(b.name, b.data)
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
+  download(blob, `${baseName(modelName)}_pieces.zip`)
 }
 
 export function exportOBJ(pieces, modelName) {

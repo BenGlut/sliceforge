@@ -111,10 +111,24 @@ button.lang:hover { color: var(--text); background: var(--field); }
 }
 .ctx-menu button:hover { background: var(--accent); }
 
-.drop-hint {
+.empty-state {
   position: absolute; inset: 0;
-  display: grid; place-items: center;
-  color: var(--text-3); font-size: 15px; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; color: var(--text-2);
+}
+.empty-state svg { width: 44px; height: 44px; color: var(--accent); opacity: 0.9; }
+.empty-state p { font-size: 15px; }
+.empty-state button.primary { width: auto; padding: 9px 22px; }
+.empty-state .formats { font-size: 12px; color: var(--text-3); letter-spacing: 1px; }
+
+.kbd {
+  font-size: 10px; color: var(--text-3);
+  border: 1px solid var(--border-strong); border-radius: 4px;
+  padding: 0 4px; line-height: 15px; margin-left: 2px;
+}
+.viewport-toolbar button.active .kbd { color: rgba(255, 255, 255, 0.75); border-color: rgba(255, 255, 255, 0.35); }
+@media (max-width: 1180px) {
+  .viewport-toolbar .tool-label, .viewport-toolbar .kbd { display: none; }
 }
 
 /* Busy: glass chip with spinner */

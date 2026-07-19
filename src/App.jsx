@@ -9,6 +9,14 @@ import { planeBasis } from './geometry/plane.js'
 import { planeCutAsync, simplifyAsync, volumeCutAsync } from './geometry/cutClient.js'
 import { IconCut, IconBox, IconRotate, IconFaceDown, IconGrid, IconLogo } from './icons.jsx'
 
+const TOOLBAR = [
+  ['plane', <IconCut key="i" />, 'planeCut'],
+  ['volume', <IconBox key="i" />, 'volumeCut'],
+  ['rotate', <IconRotate key="i" />, 'modeRotate'],
+  ['face', <IconFaceDown key="i" />, 'placeFace'],
+  ['puzzle', <IconGrid key="i" />, 'puzzle']
+]
+
 export default function App() {
   const s = useStore()
   const t = makeT(s.lang)
@@ -87,16 +95,23 @@ export default function App() {
   }, [activeTool])
 
   useEffect(() => {
-    if (!activeTool && !selectedId) return
     const onKey = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
       if (e.key === 'Escape') {
         setActiveTool(null)
         setSelectedId(null)
+        setCtxMenu(null)
+        return
+      }
+      const idx = Number(e.key) - 1
+      if (idx >= 0 && idx < TOOLBAR.length && useStore.getState().pieces.length) {
+        const tool = TOOLBAR[idx][0]
+        setActiveTool((t) => (t === tool ? null : tool))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [activeTool, selectedId])
+  }, [])
 
   useEffect(() => {
     viewerRef.current?.setVolumeMode(volumeMode)
@@ -289,17 +304,20 @@ export default function App() {
     }
   }
 
-  const { bboxRange, dims } = (() => {
+  const { modelBox, dims } = (() => {
     const box = new THREE.Box3()
     s.pieces.forEach((p) => {
       if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
       box.union(p.geometry.boundingBox)
     })
-    if (box.isEmpty()) return { bboxRange: [-100, 100], dims: null }
-    const size = box.getSize(new THREE.Vector3())
-    const d = size.length()
-    return { bboxRange: [-d, d], dims: size }
+    if (box.isEmpty()) return { modelBox: null, dims: null }
+    return { modelBox: box, dims: box.getSize(new THREE.Vector3()) }
   })()
+  // Plane slider spans the model's extent along the chosen axis only —
+  // no dead travel outside the model.
+  const planeRange = modelBox
+    ? [modelBox.min[s.plane.axis], modelBox.max[s.plane.axis]]
+    : [-100, 100]
   const isTiny = dims && Math.max(dims.x, dims.y, dims.z) < 10
 
   return (
@@ -346,24 +364,28 @@ export default function App() {
           <canvas ref={canvasRef} />
           {s.pieces.length > 0 && (
             <div className="viewport-toolbar">
-              {[
-                ['plane', <IconCut key="i" />, t('planeCut')],
-                ['volume', <IconBox key="i" />, t('volumeCut')],
-                ['rotate', <IconRotate key="i" />, t('modeRotate')],
-                ['face', <IconFaceDown key="i" />, t('placeFace')],
-                ['puzzle', <IconGrid key="i" />, t('puzzle')]
-              ].map(([tool, icon, label]) => (
+              {TOOLBAR.map(([tool, icon, labelKey], i) => (
                 <button
                   key={tool}
                   className={activeTool === tool ? 'active' : ''}
                   onClick={() => setActiveTool(activeTool === tool ? null : tool)}
                 >
-                  {icon} {label}
+                  {icon} <span className="tool-label">{t(labelKey)}</span>
+                  <span className="kbd">{i + 1}</span>
                 </button>
               ))}
             </div>
           )}
-          {!s.pieces.length && <div className="drop-hint">{t('dropHint')}</div>}
+          {!s.pieces.length && (
+            <div className="empty-state">
+              <IconLogo />
+              <p>{t('dropHint')}</p>
+              <button className="primary" onClick={() => fileRef.current.click()}>
+                {t('import')}
+              </button>
+              <span className="formats">STL · OBJ · GLB · GLTF · 3MF</span>
+            </div>
+          )}
           {s.busy && <div className="busy">{busyMsg || t('cutting')}</div>}
           {ctxMenu && (
             <div
@@ -492,7 +514,12 @@ export default function App() {
                     <button
                       key={a}
                       className={s.plane.axis === a ? 'active' : ''}
-                      onClick={() => s.setPlane({ axis: a })}
+                      onClick={() =>
+                        s.setPlane({
+                          axis: a,
+                          offset: modelBox ? (modelBox.min[a] + modelBox.max[a]) / 2 : 0
+                        })
+                      }
                     >
                       {a.toUpperCase()}
                     </button>
@@ -503,8 +530,8 @@ export default function App() {
                 {t('offset')} ({s.plane.offset.toFixed(1)})
                 <input
                   type="range"
-                  min={bboxRange[0]}
-                  max={bboxRange[1]}
+                  min={planeRange[0]}
+                  max={planeRange[1]}
                   step="0.1"
                   value={s.plane.offset}
                   onChange={(e) => s.setPlane({ offset: +e.target.value })}
@@ -540,6 +567,10 @@ export default function App() {
                   onChange={(e) => s.setCutParams({ kerf: +e.target.value })}
                 />
               </label>
+              <button className="primary" disabled={s.busy} onClick={onCut}>
+                {s.busy ? t('cutting') : t('cut')}
+              </button>
+              {s.history.length > 0 && <button onClick={s.undo}>{t('undo')}</button>}
             </section>
 
             <section>
@@ -614,10 +645,6 @@ export default function App() {
                   </label>
                 </>
               )}
-              <button className="primary" disabled={s.busy} onClick={onCut}>
-                {s.busy ? t('cutting') : t('cut')}
-              </button>
-              {s.history.length > 0 && <button onClick={s.undo}>{t('undo')}</button>}
             </section>
             </>
             )}

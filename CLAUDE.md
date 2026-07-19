@@ -13,6 +13,12 @@ push to main by `.github/workflows/deploy.yml`).
 
 ## Autonomy contract (granted by the owner 2026-07-19)
 
+- **Self-audit reflex**: after each feature, walk the app as a first-time
+  slicer user (empty state -> import -> orient -> cut -> export) and fix what
+  reads wrong WITHOUT being asked — dead slider travel, misplaced buttons,
+  silent failures (e.g. browsers blocking multi-downloads), missing
+  affordances. The owner expects proactive UX judgement, not just execution.
+
 - Implement, test, commit and push autonomously on THIS repo (this overrides
   the global "never commit without order" rule, for this repo only).
 - Every feature must be **verified before pushing**: run the geometry headless
