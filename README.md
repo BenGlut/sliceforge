@@ -12,8 +12,11 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
 - **Model setup** — per-axis rotation (±15° / ±90°), resize by target dimensions
   (proportions locked or per-axis), one-click m→mm fix for metre-unit exports
 - **Plane cut** — axis + offset + two tilt angles, optional kerf (blade clearance)
-- **Alignment pins** — cylindrical peg/socket pairs auto-placed on the cut
-  cross-section, with printable tolerance; pin diameter/length configurable
+- **Alignment pins** — cylindrical peg/socket pairs auto-placed across the cut
+  cross-section (several per region, spread to lock rotation), printable
+  tolerance; pin diameter/length configurable
+- **Mesh simplification** — decimate heavy scans to a chosen percentage
+  (meshoptimizer), model stays cuttable
 - **Watertight output** — all booleans run through [Manifold](https://github.com/elalish/manifold)
   (WASM), which guarantees manifold, hole-free results
 - **Pieces manager** — visibility toggles, exploded view, undo
@@ -27,7 +30,6 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
 - [ ] Shape cut — click a protruding feature, auto-select the connected shell
 - [ ] Color cut — split by vertex-color / texture zones (multi-material printing)
 - [ ] Dovetail / tapered connectors, manual pin placement
-- [ ] Mesh decimation (meshoptimizer) for heavy scans
 - [ ] Mesh repair for non-manifold inputs
 - [ ] Orthographic view, measurement tools
 

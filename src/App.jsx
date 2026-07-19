@@ -5,7 +5,8 @@ import { makeT } from './i18n.js'
 import { Viewer } from './three/viewer.js'
 import { importModelFile, ACCEPTED } from './io/importers.js'
 import { exportSTL, exportOBJ, exportGLB, export3MF } from './io/exporters.js'
-import { planeCut, planeBasis } from './geometry/manifoldOps.js'
+import { planeBasis } from './geometry/plane.js'
+import { planeCutAsync, simplifyAsync } from './geometry/cutClient.js'
 
 export default function App() {
   const s = useStore()
@@ -82,7 +83,7 @@ export default function App() {
       // Cut every visible piece the plane actually crosses.
       const targets = s.pieces.filter((p) => p.visible)
       for (const piece of targets) {
-        const parts = await planeCut(piece.geometry, s.plane, s.cutParams)
+        const parts = await planeCutAsync(piece.geometry, s.plane, s.cutParams)
         if (parts.length < 2) continue
         useStore.getState().replacePiece(
           piece.id,
@@ -94,6 +95,29 @@ export default function App() {
           }))
         )
       }
+    } catch (e) {
+      console.error(e)
+      s.setError(t('cutError'))
+    } finally {
+      s.setBusy(false)
+    }
+  }
+
+  const [simplifyPct, setSimplifyPct] = useState(25)
+  const triCount = s.pieces.reduce(
+    (n, p) => n + (p.geometry.index ? p.geometry.index.count : p.geometry.attributes.position.count) / 3,
+    0
+  )
+
+  async function onSimplify() {
+    s.setBusy(true)
+    s.setError(null)
+    try {
+      const geoms = []
+      for (const p of s.pieces) {
+        geoms.push((await simplifyAsync(p.geometry, simplifyPct / 100))[0])
+      }
+      useStore.getState().replaceAllGeometries(geoms)
     } catch (e) {
       console.error(e)
       s.setError(t('cutError'))
@@ -227,6 +251,21 @@ export default function App() {
                 />
                 {t('gizmo')}
               </label>
+              <div className="dims">{t('triangles', { n: Math.round(triCount).toLocaleString() })}</div>
+              <div className="simplify-row">
+                <input
+                  type="number"
+                  min="1"
+                  max="90"
+                  value={simplifyPct}
+                  onChange={(e) => setSimplifyPct(+e.target.value)}
+                  aria-label="%"
+                />
+                <span>%</span>
+                <button disabled={s.busy} onClick={onSimplify}>
+                  {t('simplify')}
+                </button>
+              </div>
               <label>
                 {t('rotation')}
                 {['x', 'y', 'z'].map((axis) => (

@@ -69,6 +69,10 @@ aside input[type='range'] { accent-color: #3d6ef7; }
 .pieces { list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .dims { color: #9aa3b5; font-size: 12px; }
 .dim-row { display: flex; gap: 6px; }
+.simplify-row { display: flex; gap: 6px; align-items: center; }
+.simplify-row input { width: 58px; }
+.simplify-row span { color: #9aa3b5; }
+.simplify-row button { flex: 1; }
 .dim-row input { width: 100%; min-width: 0; }
 .rot-row { display: flex; gap: 4px; align-items: center; margin-top: 4px; }
 .rot-row .rot-axis { width: 14px; color: #9aa3b5; font-size: 12px; }

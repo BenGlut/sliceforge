@@ -102,6 +102,15 @@ export const useStore = create((set) => ({
       }
     }),
 
+  replaceAllGeometries: (geoms) =>
+    set((s) => {
+      if (geoms.length !== s.pieces.length) return {}
+      return {
+        pieces: s.pieces.map((p, i) => ({ ...p, geometry: geoms[i] })),
+        history: [...s.history, s.pieces]
+      }
+    }),
+
   togglePiece: (id) =>
     set((s) => ({
       pieces: s.pieces.map((p) => (p.id === id ? { ...p, visible: !p.visible } : p))

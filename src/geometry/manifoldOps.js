@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import Module from 'manifold-3d'
+import { MeshoptSimplifier } from 'meshoptimizer'
+import { planeBasis } from './plane.js'
 
 let wasmPromise = null
 async function getWasm() {
@@ -81,19 +83,60 @@ function pointInPolygon([px, py], poly) {
 }
 
 /**
- * Compute the world matrix that maps the cut plane onto z = 0.
- * plane: { axis: 'x'|'y'|'z', offset, tiltA, tiltB } — tilts in degrees.
+ * Choose pin positions on the z=0 cross-section: a coarse grid per region,
+ * candidates must fit the whole pin (ring test with margin), then a greedy
+ * spread pick — several pins lock rotation, one central pin cannot.
  */
-export function planeBasis(plane) {
-  const base = { x: [0, 90, 0], y: [-90, 0, 0], z: [0, 0, 0] }[plane.axis]
-  const e = new THREE.Euler(
-    THREE.MathUtils.degToRad(base[0] + plane.tiltA),
-    THREE.MathUtils.degToRad(base[1] + plane.tiltB),
-    0
-  )
-  const normal = new THREE.Vector3(0, 0, 1).applyEuler(e).normalize()
-  const origin = normal.clone().multiplyScalar(plane.offset)
-  return { normal, origin }
+function pinSpots(polys, r, tol) {
+  const margin = r + tol + 1.5
+  const outers = polys.filter((p) => polygonArea(p) > 0)
+  const holes = polys.filter((p) => polygonArea(p) < 0)
+  const inside = (pt) =>
+    outers.some((o) => pointInPolygon(pt, o)) && !holes.some((h) => pointInPolygon(pt, h))
+  const fits = (pt) => {
+    if (!inside(pt)) return false
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4
+      if (!inside([pt[0] + margin * Math.cos(a), pt[1] + margin * Math.sin(a)])) return false
+    }
+    return true
+  }
+
+  const spots = []
+  for (const poly of outers) {
+    const area = polygonArea(poly)
+    if (area < Math.PI * margin * margin * 2.5) continue
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const [x, y] of poly) {
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+    }
+    const nx = Math.min(10, Math.max(2, Math.round((maxX - minX) / (4 * margin))))
+    const ny = Math.min(10, Math.max(2, Math.round((maxY - minY) / (4 * margin))))
+    const cand = []
+    const c = polygonCentroid(poly)
+    if (c && fits(c)) cand.push(c)
+    for (let i = 0; i < nx; i++) {
+      for (let j = 0; j < ny; j++) {
+        const pt = [
+          minX + ((i + 0.5) * (maxX - minX)) / nx,
+          minY + ((j + 0.5) * (maxY - minY)) / ny
+        ]
+        if (fits(pt)) cand.push(pt)
+      }
+    }
+    // Greedy farthest-point pick, min spacing scaled to the region size.
+    const minDist = Math.max(6 * margin, Math.sqrt(area) / 3)
+    const picked = []
+    for (const pt of cand) {
+      if (picked.length >= 5) break
+      if (picked.every((q) => Math.hypot(pt[0] - q[0], pt[1] - q[1]) >= minDist)) picked.push(pt)
+    }
+    spots.push(...picked)
+  }
+  return spots
 }
 
 /**
@@ -134,21 +177,11 @@ export async function planeCut(geometry, plane, params) {
       const tol = Math.max(0, params.tolerance)
       const section = solid.slice(0)
       cleanup.push(section)
-      const polys = section.toPolygons()
-
-      // One pin per cross-section region large enough to host it,
-      // placed at the region's centroid when it lies inside the outline.
-      const minArea = Math.PI * (r + tol + 1) ** 2 * 2
-      const outers = polys.filter((p) => polygonArea(p) > minArea)
-      const holes = polys.filter((p) => polygonArea(p) < 0)
-      for (const poly of outers) {
-        const c = polygonCentroid(poly)
-        if (!c || !pointInPolygon(c, poly)) continue
-        if (holes.some((hp) => pointInPolygon(c, hp))) continue
-        const peg = Manifold.cylinder(h, r, r, 48, true).translate([c[0], c[1], 0])
+      for (const [x, y] of pinSpots(section.toPolygons(), r, tol)) {
+        const peg = Manifold.cylinder(h, r, r, 48, true).translate([x, y, 0])
         const socket = Manifold.cylinder(h + 2 * tol, r + tol, r + tol, 48, true).translate([
-          c[0],
-          c[1],
+          x,
+          y,
           0
         ])
         cleanup.push(peg, socket)
@@ -162,6 +195,8 @@ export async function planeCut(geometry, plane, params) {
 
     const gTop = manifoldToGeometry(top).applyMatrix4(toWorld)
     const gBottom = manifoldToGeometry(bottom).applyMatrix4(toWorld)
+    gTop.computeVertexNormals()
+    gBottom.computeVertexNormals()
     return [gTop, gBottom]
   } finally {
     solid.delete()
@@ -173,4 +208,29 @@ export async function planeCut(geometry, plane, params) {
       }
     }
   }
+}
+
+/**
+ * Reduce the triangle count to ~ratio (0..1) of the current one.
+ * The mesh is first welded through Manifold (clean shared index), then
+ * decimated with meshoptimizer's edge-collapse simplifier, which preserves
+ * topology — the result stays cuttable.
+ */
+export async function simplifyGeometry(geometry, ratio) {
+  const wasm = await getWasm()
+  const solid = geometryToManifold(wasm, geometry)
+  const welded = manifoldToGeometry(solid)
+  solid.delete()
+
+  await MeshoptSimplifier.ready
+  const index = new Uint32Array(welded.index.array)
+  const positions = new Float32Array(welded.attributes.position.array)
+  const target = Math.max(4, Math.floor((index.length * ratio) / 3)) * 3
+  const [newIndex] = MeshoptSimplifier.simplify(index, positions, 3, target, 0.05, [])
+
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  g.setIndex(new THREE.BufferAttribute(newIndex, 1))
+  g.computeVertexNormals()
+  return g
 }
