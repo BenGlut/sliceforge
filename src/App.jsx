@@ -7,6 +7,7 @@ import { importModelFile, ACCEPTED } from './io/importers.js'
 import { exportSTL, exportOBJ, exportGLB, export3MF } from './io/exporters.js'
 import { planeBasis } from './geometry/plane.js'
 import { planeCutAsync, simplifyAsync, volumeCutAsync } from './geometry/cutClient.js'
+import { IconCut, IconBox, IconRotate, IconLogo } from './icons.jsx'
 
 export default function App() {
   const s = useStore()
@@ -18,12 +19,20 @@ export default function App() {
 
   // CAD-style tooling: gizmos belong to an active tool, nothing is shown by
   // default. Esc leaves the tool.
-  const [activeTool, setActiveTool] = useState(null) // null | 'rotate' | 'volume'
+  const [activeTool, setActiveTool] = useState(null) // null | 'plane' | 'rotate' | 'volume'
   const [volumeMode, setVolumeMode] = useState('translate')
+  const [selectedId, setSelectedId] = useState(null)
 
   useEffect(() => {
     const viewer = new Viewer(canvasRef.current)
     viewer.onRotateEnd = (q) => useStore.getState().rotateModelQuaternion(q)
+    // CAD selection: clicking a piece selects it and summons the rotation
+    // gizmo; clicking empty space clears both.
+    viewer.onPieceClick = (id) => {
+      setSelectedId(id)
+      if (id) setActiveTool((tool) => tool ?? 'rotate')
+      else setActiveTool((tool) => (tool === 'rotate' ? null : tool))
+    }
     if (import.meta.env.DEV) window.__sfViewer = viewer
     viewerRef.current = viewer
     return () => viewer.dispose()
@@ -46,11 +55,20 @@ export default function App() {
   }, [activeTool, s.pieces.length > 0])
 
   useEffect(() => {
-    if (!activeTool) return
-    const onKey = (e) => e.key === 'Escape' && setActiveTool(null)
+    viewerRef.current?.setSelected(selectedId)
+  }, [selectedId, s.pieces])
+
+  useEffect(() => {
+    if (!activeTool && !selectedId) return
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setActiveTool(null)
+        setSelectedId(null)
+      }
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [activeTool])
+  }, [activeTool, selectedId])
 
   useEffect(() => {
     viewerRef.current?.setVolumeMode(volumeMode)
@@ -196,7 +214,9 @@ export default function App() {
       }}
     >
       <header>
-        <span className="logo">⚒ SliceForge</span>
+        <span className="logo">
+          <IconLogo /> SliceForge
+        </span>
         <button onClick={() => fileRef.current.click()}>{t('import')}</button>
         <input
           ref={fileRef}
@@ -229,16 +249,16 @@ export default function App() {
           {s.pieces.length > 0 && (
             <div className="viewport-toolbar">
               {[
-                ['plane', '✂️', t('planeCut')],
-                ['volume', '📦', t('volumeCut')],
-                ['rotate', '🔄', t('modeRotate')]
+                ['plane', <IconCut key="i" />, t('planeCut')],
+                ['volume', <IconBox key="i" />, t('volumeCut')],
+                ['rotate', <IconRotate key="i" />, t('modeRotate')]
               ].map(([tool, icon, label]) => (
                 <button
                   key={tool}
                   className={activeTool === tool ? 'active' : ''}
                   onClick={() => setActiveTool(activeTool === tool ? null : tool)}
                 >
-                  <span aria-hidden="true">{icon}</span> {label}
+                  {icon} {label}
                 </button>
               ))}
             </div>
@@ -489,15 +509,23 @@ export default function App() {
               </h3>
               <ul className="pieces">
                 {s.pieces.map((p) => (
-                  <li key={p.id}>
+                  <li key={p.id} className={p.id === selectedId ? 'selected' : ''}>
                     <label className="inline">
                       <input
                         type="checkbox"
                         checked={p.visible}
                         onChange={() => s.togglePiece(p.id)}
                       />
-                      {p.name}
                     </label>
+                    <span
+                      className="piece-name"
+                      onClick={() => {
+                        setSelectedId(p.id)
+                        setActiveTool((tool) => tool ?? 'rotate')
+                      }}
+                    >
+                      {p.name}
+                    </span>
                   </li>
                 ))}
               </ul>

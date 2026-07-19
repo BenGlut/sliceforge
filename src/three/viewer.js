@@ -58,6 +58,43 @@ export class Viewer {
     }
     loop()
 
+    // Click-to-select: a press that barely moved (not an orbit drag, not a
+    // gizmo grab) raycasts the pieces' bounding boxes — O(pieces), instant
+    // even on multi-million-triangle meshes.
+    this.onPieceClick = null
+    this.selectedPieceId = null
+    this._raycaster = new THREE.Raycaster()
+    this._downPos = null
+    canvas.addEventListener('pointerdown', (e) => {
+      this._downPos = [e.clientX, e.clientY]
+    })
+    canvas.addEventListener('pointerup', (e) => {
+      const down = this._downPos
+      this._downPos = null
+      if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return
+      if (this.gizmo.dragging || this.volGizmo?.dragging) return
+      const rect = canvas.getBoundingClientRect()
+      this._raycaster.setFromCamera(
+        new THREE.Vector2(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1
+        ),
+        this.camera
+      )
+      let best = null
+      const target = new THREE.Vector3()
+      for (const mesh of this.piecesGroup.children) {
+        if (!mesh.visible) continue
+        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+        const box = mesh.geometry.boundingBox.clone().translate(mesh.position)
+        if (this._raycaster.ray.intersectBox(box, target)) {
+          const d = target.distanceTo(this.camera.position)
+          if (!best || d < best.d) best = { d, id: mesh.userData.pieceId }
+        }
+      }
+      this.onPieceClick?.(best?.id ?? null)
+    })
+
     this._onResize = () => {
       const { clientWidth: w, clientHeight: h } = canvas.parentElement
       this.renderer.setSize(w, h, false)
@@ -91,6 +128,7 @@ export class Viewer {
         mesh.geometry = p.geometry
       }
       mesh.material.color.setHex(PIECE_COLORS[i % PIECE_COLORS.length])
+      mesh.material.emissive.setHex(p.id === this.selectedPieceId ? 0x24407a : 0x000000)
       mesh.visible = p.visible
       this.piecesGroup.add(mesh)
     })
@@ -115,6 +153,13 @@ export class Viewer {
       if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
       mesh.geometry.boundingBox.getCenter(c).sub(this.modelCenter)
       mesh.position.copy(c.multiplyScalar(factor))
+    }
+  }
+
+  setSelected(pieceId) {
+    this.selectedPieceId = pieceId
+    for (const mesh of this.piecesGroup.children) {
+      mesh.material.emissive.setHex(mesh.userData.pieceId === pieceId ? 0x24407a : 0x000000)
     }
   }
 

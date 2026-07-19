@@ -47,6 +47,13 @@ Key invariants:
   swapped, camera refit ONLY on new-model import (refit flag from App). Pixel
   ratio capped at 1.5. Remaining known cost: transform bake on huge meshes
   (~0.5 s/160k tris in dev) — lazy bake is the next perf item.
+- **Selection (CAD standard)**: clicking a piece in the viewport selects it
+  (emissive highlight + list highlight) and summons the rotation gizmo;
+  clicking away or Esc clears. Hit test = bounding-box raycast (O(pieces),
+  instant on huge meshes, but generous around diagonal views) — upgrade to
+  three-mesh-bvh if per-triangle precision is ever needed.
+- **Icons**: inline SVG components in `src/icons.jsx` (stroke, currentColor).
+  NO emoji anywhere in the UI.
 - **Tool-based UI (CAD standard)**: plane helper, volume box and rotation
   rings are TOOLS in the viewport toolbar — exactly one active at a time,
   nothing shown by default, Esc leaves the tool, each tool brings its own

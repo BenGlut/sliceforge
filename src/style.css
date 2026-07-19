@@ -15,7 +15,9 @@ header {
   background: #1b1e27;
   border-bottom: 1px solid #2a2f3d;
 }
-.logo { font-weight: 700; letter-spacing: 0.5px; margin-right: 8px; }
+.logo { font-weight: 700; letter-spacing: 0.5px; margin-right: 8px; display: flex; align-items: center; gap: 7px; }
+.logo svg { color: #3d6ef7; }
+button svg { display: block; flex-shrink: 0; }
 .spacer { flex: 1; }
 .export-group { display: flex; align-items: center; gap: 6px; color: #9aa3b5; }
 
@@ -41,6 +43,7 @@ button.lang { padding: 6px 8px; }
 }
 .viewport-toolbar button {
   background: rgba(27, 30, 39, 0.88); backdrop-filter: blur(4px);
+  display: flex; align-items: center; gap: 7px;
 }
 .viewport-toolbar button.active { background: #3d6ef7; border-color: #3d6ef7; }
 
@@ -75,7 +78,13 @@ aside input[type='number'] {
 aside input[type='range'] { accent-color: #3d6ef7; }
 .axis-row { display: flex; gap: 6px; }
 .axis-row button { flex: 1; }
-.pieces { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.pieces { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.pieces li {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 6px; border-radius: 6px;
+}
+.pieces li.selected { background: #24407a; }
+.piece-name { cursor: pointer; flex: 1; }
 .dims { color: #9aa3b5; font-size: 12px; }
 .dim-row { display: flex; gap: 6px; }
 .simplify-row { display: flex; gap: 6px; align-items: center; }

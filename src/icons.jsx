@@ -1,0 +1,43 @@
+// Inline SVG icons — stroke-based, inherit the button's text color.
+const base = {
+  width: 15,
+  height: 15,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  'aria-hidden': true
+}
+
+export const IconCut = () => (
+  <svg {...base}>
+    <circle cx="6" cy="6" r="3" />
+    <circle cx="6" cy="18" r="3" />
+    <line x1="8.2" y1="8.2" x2="20" y2="20" />
+    <line x1="8.2" y1="15.8" x2="20" y2="4" />
+  </svg>
+)
+
+export const IconBox = () => (
+  <svg {...base}>
+    <path d="M12 2.5 21 7v10l-9 4.5L3 17V7l9-4.5Z" />
+    <path d="M3 7l9 4.5L21 7" />
+    <line x1="12" y1="11.5" x2="12" y2="21.5" />
+  </svg>
+)
+
+export const IconRotate = () => (
+  <svg {...base}>
+    <path d="M21 12a9 9 0 1 1-2.9-6.6" />
+    <polyline points="21 2.5 21 8.5 15 8.5" />
+  </svg>
+)
+
+export const IconLogo = () => (
+  <svg {...base} width={18} height={18}>
+    <path d="M12 2.5 21 7v10l-9 4.5L3 17V7l9-4.5Z" />
+    <line x1="3.5" y1="16.5" x2="20.5" y2="7.5" />
+  </svg>
+)
