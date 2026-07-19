@@ -1,0 +1,11 @@
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  optimizeDeps: {
+    // manifold-3d loads its own .wasm relative to import.meta.url —
+    // pre-bundling would break that resolution.
+    exclude: ['manifold-3d']
+  }
+})
