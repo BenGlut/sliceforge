@@ -41,6 +41,12 @@ src/
 ```
 
 Key invariants:
+- **Perf discipline**: never call `computeBoundingBox()` unconditionally —
+  check `geometry.boundingBox` first (three caches it; `applyMatrix4` refreshes
+  it). `setPieces` is SURGICAL: meshes reused by piece id, geometry pointers
+  swapped, camera refit ONLY on new-model import (refit flag from App). Pixel
+  ratio capped at 1.5. Remaining known cost: transform bake on huge meshes
+  (~0.5 s/160k tris in dev) — lazy bake is the next perf item.
 - **Tool-based UI (CAD standard)**: plane helper, volume box and rotation
   rings are TOOLS in the viewport toolbar — exactly one active at a time,
   nothing shown by default, Esc leaves the tool, each tool brings its own
@@ -102,3 +108,5 @@ mentions anywhere in the repo.
 8. Color cut (vertex colors / texture zones) — needs color-preserving import
 9. Tapered pins ~~done~~ (tip 80% of base, default ON); dovetail + manual pin placement remain
 10. Mesh repair for non-manifold inputs
+11. Perf: lazy transform bake (keep rotations on the group until a cut/export
+    needs baked coordinates) — kills the end-of-drag hitch on multi-M-tri models

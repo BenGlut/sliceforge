@@ -4,7 +4,7 @@ import { create } from 'zustand'
 function modelCenter(pieces) {
   const box = new THREE.Box3()
   for (const p of pieces) {
-    p.geometry.computeBoundingBox()
+    if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
     box.union(p.geometry.boundingBox)
   }
   return box.getCenter(new THREE.Vector3())
@@ -16,10 +16,8 @@ function transformPieces(pieces, makeM) {
     .makeTranslation(c.x, c.y, c.z)
     .multiply(makeM())
     .multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z))
-  for (const p of pieces) {
-    p.geometry.applyMatrix4(m)
-    p.geometry.computeBoundingBox()
-  }
+  // applyMatrix4 refreshes an already-computed boundingBox itself.
+  for (const p of pieces) p.geometry.applyMatrix4(m)
 }
 
 // pieces: [{ id, name, geometry, visible }] — geometry is a THREE.BufferGeometry
@@ -93,7 +91,6 @@ export const useStore = create((set) => ({
     set((s) => {
       for (const p of s.pieces) {
         p.geometry.scale(factor, factor, factor)
-        p.geometry.computeBoundingBox()
       }
       return {
         pieces: [...s.pieces],

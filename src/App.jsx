@@ -30,8 +30,11 @@ export default function App() {
   }, [])
 
 
+  const lastModelRef = useRef(null)
   useEffect(() => {
-    viewerRef.current?.setPieces(s.pieces, s.explode)
+    const refit = s.modelName !== lastModelRef.current
+    lastModelRef.current = s.modelName
+    viewerRef.current?.setPieces(s.pieces, s.explode, refit)
   }, [s.pieces])
 
   useEffect(() => {
@@ -94,7 +97,7 @@ export default function App() {
     const { normal, origin } = planeBasis(s.plane)
     const box = new THREE.Box3()
     s.pieces.forEach((p) => {
-      p.geometry.computeBoundingBox()
+      if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
       box.union(p.geometry.boundingBox)
     })
     const size = box.isEmpty() ? 100 : box.getSize(new THREE.Vector3()).length()
@@ -173,7 +176,7 @@ export default function App() {
   const { bboxRange, dims } = (() => {
     const box = new THREE.Box3()
     s.pieces.forEach((p) => {
-      p.geometry.computeBoundingBox()
+      if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
       box.union(p.geometry.boundingBox)
     })
     if (box.isEmpty()) return { bboxRange: [-100, 100], dims: null }

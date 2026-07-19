@@ -7,7 +7,8 @@ const PIECE_COLORS = [0x5b8dee, 0xee8a5b, 0x62c48a, 0xd46bc8, 0xe0c34f, 0x6bd4cf
 export class Viewer {
   constructor(canvas) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-    this.renderer.setPixelRatio(window.devicePixelRatio)
+    // Full retina (x2) is wasted on multi-million-triangle scenes — cap it.
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x14161c)
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 5000)
@@ -67,30 +68,37 @@ export class Viewer {
     this._onResize()
   }
 
-  setPieces(pieces, explode = 0) {
+  // Surgical update: meshes are reused across renders (no GPU re-creation,
+  // no material churn); the camera refits only when the caller says a new
+  // model arrived — never on transforms/cuts (that jump read as a freeze).
+  setPieces(pieces, explode = 0, refit = false) {
+    const byId = new Map(
+      [...this.piecesGroup.children].map((m) => [m.userData.pieceId, m])
+    )
     this.piecesGroup.clear()
     const box = new THREE.Box3()
-    pieces.forEach((p) => {
-      p.geometry.computeBoundingBox()
-      box.union(p.geometry.boundingBox)
-    })
-    if (!box.isEmpty()) box.getCenter(this.modelCenter)
-
     pieces.forEach((p, i) => {
-      const mat = new THREE.MeshStandardMaterial({
-        color: PIECE_COLORS[i % PIECE_COLORS.length],
-        roughness: 0.55,
-        metalness: 0.05
-      })
-      const mesh = new THREE.Mesh(p.geometry, mat)
+      if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
+      box.union(p.geometry.boundingBox)
+      let mesh = byId.get(p.id)
+      if (!mesh) {
+        mesh = new THREE.Mesh(
+          p.geometry,
+          new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 })
+        )
+        mesh.userData.pieceId = p.id
+      } else if (mesh.geometry !== p.geometry) {
+        mesh.geometry = p.geometry
+      }
+      mesh.material.color.setHex(PIECE_COLORS[i % PIECE_COLORS.length])
       mesh.visible = p.visible
-      mesh.userData.pieceId = p.id
       this.piecesGroup.add(mesh)
     })
+    if (!box.isEmpty()) box.getCenter(this.modelCenter)
     this.setExplode(explode)
     if (this.gizmoHelper.visible) this.pivot.position.copy(this.modelCenter)
 
-    if (!box.isEmpty() && pieces.length === 1) {
+    if (!box.isEmpty() && refit) {
       const size = box.getSize(new THREE.Vector3()).length()
       const d = Math.max(size, 10)
       this.camera.position
@@ -104,6 +112,7 @@ export class Viewer {
   setExplode(factor) {
     const c = new THREE.Vector3()
     for (const mesh of this.piecesGroup.children) {
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
       mesh.geometry.boundingBox.getCenter(c).sub(this.modelCenter)
       mesh.position.copy(c.multiplyScalar(factor))
     }
