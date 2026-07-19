@@ -43,6 +43,15 @@ export const IconFaceDown = () => (
   </svg>
 )
 
+export const IconGrid = () => (
+  <svg {...base}>
+    <rect x="3.5" y="3.5" width="7" height="7" rx="1" />
+    <rect x="13.5" y="3.5" width="7" height="7" rx="1" />
+    <rect x="3.5" y="13.5" width="7" height="7" rx="1" />
+    <rect x="13.5" y="13.5" width="7" height="7" rx="1" />
+  </svg>
+)
+
 export const IconLogo = () => (
   <svg {...base} width={18} height={18}>
     <path d="M12 2.5 21 7v10l-9 4.5L3 17V7l9-4.5Z" />

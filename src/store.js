@@ -37,7 +37,15 @@ export const useStore = create((set) => ({
   plane: { axis: 'z', offset: 0, tiltA: 0, tiltB: 0 },
   setPlane: (patch) => set((s) => ({ plane: { ...s.plane, ...patch } })),
 
-  cutParams: { kerf: 0.15, pins: true, pinDiameter: 6, pinLength: 8, tolerance: 0.15, taper: true },
+  cutParams: {
+    kerf: 0.15,
+    pins: true,
+    pinDiameter: 6,
+    pinLength: 8,
+    tolerance: 0.15,
+    taper: true,
+    connectorType: 'pin'
+  },
   setCutParams: (patch) => set((s) => ({ cutParams: { ...s.cutParams, ...patch } })),
 
   setModel: (name, geometry) =>
@@ -98,6 +106,9 @@ export const useStore = create((set) => ({
         plane: { ...s.plane, offset: s.plane.offset * factor }
       }
     }),
+
+  setPiecesBulk: (pieces) =>
+    set((s) => ({ pieces, history: [...s.history, s.pieces] })),
 
   replaceAllGeometries: (geoms) =>
     set((s) => {

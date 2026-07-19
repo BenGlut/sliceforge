@@ -118,6 +118,10 @@ mentions anywhere in the repo.
 4. ~~Multiple pins per cut face~~ (grid candidates + ring-fit test + greedy spread, max 5/region)
 5. ~~Mesh decimation~~ (weld via Manifold then MeshoptSimplifier, % in Model section)
 6. ~~Volume cut~~ (oriented box + TransformControls translate/rotate/scale; cut in box-local frame vs unit cube; no pins yet)
+6a. ~~Puzzle blocks~~ (grid slice at a chosen block size, e.g. printer-bed
+    230³; sequential plane cuts skipping non-crossing pieces; blocks renamed
+    bottom-layer-first; connector shapes: round/square/hex pegs or dowel
+    holes — same holes both sides, bridged by a wooden/printed dowel)
 6b. ~~Place-on-face~~ (OrcaSlicer-style: face tool -> click a face -> model
     rotated so that face lies on the grid; grid re-grounds under it)
 7. Shape cut (click a protruding feature → connected-shell selection)

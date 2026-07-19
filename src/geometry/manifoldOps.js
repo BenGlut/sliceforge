@@ -172,6 +172,11 @@ export async function planeCut(geometry, plane, params) {
     }
 
     if (params.pins) {
+      // Connector shapes: round/square/hex pegs (one piece carries the peg,
+      // the other the socket) or dowel holes (both pieces get the same hole,
+      // a separate wooden/printed dowel bridges them).
+      const type = params.connectorType || 'pin'
+      const seg = { pin: 48, square: 4, hex: 6, dowel: 48 }[type] ?? 48
       const r = Math.max(0.2, params.pinDiameter / 2)
       const h = Math.max(1, params.pinLength)
       const tol = Math.max(0, params.tolerance)
@@ -179,10 +184,24 @@ export async function planeCut(geometry, plane, params) {
       cleanup.push(section)
       // Tapered pegs (tip 80% of base radius) slide into their socket without
       // fighting the first layers — much easier to assemble than straight pins.
-      const rTip = params.taper ? r * 0.8 : r
+      const rTip = params.taper && type !== 'dowel' ? r * 0.8 : r
       for (const [x, y] of pinSpots(section.toPolygons(), r, tol)) {
-        const peg = Manifold.cylinder(h, r, rTip, 48, true).translate([x, y, 0])
-        const socket = Manifold.cylinder(h + 2 * tol, r + tol, rTip + tol, 48, true).translate([
+        if (type === 'dowel') {
+          const hole = Manifold.cylinder(h + 2 * tol, r + tol, r + tol, seg, true).translate([
+            x,
+            y,
+            0
+          ])
+          cleanup.push(hole)
+          const t2 = top.subtract(hole)
+          const b2 = bottom.subtract(hole)
+          cleanup.push(t2, b2)
+          top = t2
+          bottom = b2
+          continue
+        }
+        const peg = Manifold.cylinder(h, r, rTip, seg, true).translate([x, y, 0])
+        const socket = Manifold.cylinder(h + 2 * tol, r + tol, rTip + tol, seg, true).translate([
           x,
           y,
           0

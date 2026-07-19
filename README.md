@@ -14,6 +14,9 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
   dimensions (proportions locked or per-axis), one-click m→mm fix for
   metre-unit exports
 - **Plane cut** — axis + offset + two tilt angles, optional kerf (blade clearance)
+- **Puzzle blocks** — slice a (life-size) model into printable blocks of a
+  chosen size (e.g. 230 x 230 x 230 mm) with connectors on every interface:
+  round, square or hex pegs, or dowel holes for wooden/printed dowels
 - **Volume cut** — position/rotate/scale a box in the viewport and detach
   whatever falls inside it (a hand, a head) as its own piece
 - **Alignment pins** — cylindrical peg/socket pairs auto-placed across the cut

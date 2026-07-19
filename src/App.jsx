@@ -7,7 +7,7 @@ import { importModelFile, ACCEPTED } from './io/importers.js'
 import { exportSTL, exportOBJ, exportGLB, export3MF } from './io/exporters.js'
 import { planeBasis } from './geometry/plane.js'
 import { planeCutAsync, simplifyAsync, volumeCutAsync } from './geometry/cutClient.js'
-import { IconCut, IconBox, IconRotate, IconFaceDown, IconLogo } from './icons.jsx'
+import { IconCut, IconBox, IconRotate, IconFaceDown, IconGrid, IconLogo } from './icons.jsx'
 
 export default function App() {
   const s = useStore()
@@ -22,6 +22,8 @@ export default function App() {
   const [activeTool, setActiveTool] = useState(null) // null | 'plane' | 'rotate' | 'volume'
   const [volumeMode, setVolumeMode] = useState('translate')
   const [selectedId, setSelectedId] = useState(null)
+  const [blockSize, setBlockSizeState] = useState({ x: 220, y: 220, z: 250 })
+  const [busyMsg, setBusyMsg] = useState(null)
 
   useEffect(() => {
     // One Viewer per canvas, ever: StrictMode double-mounts effects in dev,
@@ -209,6 +211,76 @@ export default function App() {
     }
   }
 
+  // Puzzle: slice the model into printable blocks along a regular grid,
+  // connectors added on every interface by the plane-cut engine.
+  async function onPuzzle() {
+    s.setBusy(true)
+    s.setError(null)
+    try {
+      const box = new THREE.Box3()
+      s.pieces.forEach((p) => {
+        if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
+        box.union(p.geometry.boundingBox)
+      })
+      const planes = []
+      for (const [axis, size] of [
+        ['x', blockSize.x],
+        ['y', blockSize.y],
+        ['z', blockSize.z]
+      ]) {
+        if (!(size > 1)) continue
+        for (let off = box.min[axis] + size; off < box.max[axis] - 0.01; off += size) {
+          planes.push({ axis, offset: off, tiltA: 0, tiltB: 0 })
+        }
+      }
+      let current = s.pieces.filter((p) => p.visible)
+      let done = 0
+      for (const plane of planes) {
+        const next = []
+        for (const piece of current) {
+          if (!piece.geometry.boundingBox) piece.geometry.computeBoundingBox()
+          const bb = piece.geometry.boundingBox
+          if (
+            plane.offset <= bb.min[plane.axis] + 0.05 ||
+            plane.offset >= bb.max[plane.axis] - 0.05
+          ) {
+            next.push(piece)
+            continue
+          }
+          const parts = await planeCutAsync(piece.geometry, plane, s.cutParams)
+          if (parts.length < 2) next.push(piece)
+          else
+            parts.forEach((g) =>
+              next.push({ id: newPieceId(), name: piece.name, geometry: g, visible: true })
+            )
+        }
+        current = next
+        done++
+        setBusyMsg(`${done} / ${planes.length}`)
+      }
+      // Name blocks bottom layer first, stable reading order for assembly.
+      const base = (s.modelName || 'model').replace(/\.[^.]+$/, '')
+      const c = new THREE.Vector3()
+      current
+        .map((p) => {
+          p.geometry.computeBoundingBox()
+          p.geometry.boundingBox.getCenter(c)
+          return { p, y: c.y, z: c.z, x: c.x }
+        })
+        .sort((a, b) => a.y - b.y || a.z - b.z || a.x - b.x)
+        .forEach((e, i) => {
+          e.p.name = `${base}_${String(i + 1).padStart(2, '0')}`
+        })
+      useStore.getState().setPiecesBulk([...current])
+    } catch (e) {
+      console.error(e)
+      s.setError(t('cutError'))
+    } finally {
+      s.setBusy(false)
+      setBusyMsg(null)
+    }
+  }
+
   const { bboxRange, dims } = (() => {
     const box = new THREE.Box3()
     s.pieces.forEach((p) => {
@@ -270,7 +342,8 @@ export default function App() {
                 ['plane', <IconCut key="i" />, t('planeCut')],
                 ['volume', <IconBox key="i" />, t('volumeCut')],
                 ['rotate', <IconRotate key="i" />, t('modeRotate')],
-                ['face', <IconFaceDown key="i" />, t('placeFace')]
+                ['face', <IconFaceDown key="i" />, t('placeFace')],
+                ['puzzle', <IconGrid key="i" />, t('puzzle')]
               ].map(([tool, icon, label]) => (
                 <button
                   key={tool}
@@ -283,7 +356,7 @@ export default function App() {
             </div>
           )}
           {!s.pieces.length && <div className="drop-hint">{t('dropHint')}</div>}
-          {s.busy && <div className="busy">{t('cutting')}</div>}
+          {s.busy && <div className="busy">{busyMsg || t('cutting')}</div>}
           {s.error && (
             <div className="error" onClick={() => s.setError(null)}>
               {s.error}
@@ -488,6 +561,25 @@ export default function App() {
                     />
                     {t('taper')}
                   </label>
+                  <label>
+                    {t('connector')}
+                    <div className="axis-row">
+                      {[
+                        ['pin', t('connPin')],
+                        ['square', t('connSquare')],
+                        ['hex', t('connHex')],
+                        ['dowel', t('connDowel')]
+                      ].map(([type, label]) => (
+                        <button
+                          key={type}
+                          className={s.cutParams.connectorType === type ? 'active' : ''}
+                          onClick={() => s.setCutParams({ connectorType: type })}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </label>
                 </>
               )}
               <button className="primary" disabled={s.busy} onClick={onCut}>
@@ -518,6 +610,82 @@ export default function App() {
                 </div>
                 <button className="primary" disabled={s.busy} onClick={onVolumeCut}>
                   {s.busy ? t('cutting') : t('detach')}
+                </button>
+              </section>
+            )}
+
+            {activeTool === 'puzzle' && (
+              <section>
+                <h3>{t('puzzle')}</h3>
+                <label>
+                  {t('blockSize')}
+                  <div className="dim-row">
+                    {['x', 'y', 'z'].map((axis) => (
+                      <input
+                        key={axis}
+                        type="number"
+                        min="10"
+                        step="10"
+                        value={blockSize[axis]}
+                        aria-label={axis.toUpperCase()}
+                        onChange={(e) =>
+                          setBlockSizeState({ ...blockSize, [axis]: +e.target.value })
+                        }
+                      />
+                    ))}
+                  </div>
+                </label>
+                {dims && (
+                  <div className="dims">
+                    {t('blocksEstimate', {
+                      n:
+                        Math.ceil(dims.x / Math.max(1, blockSize.x)) *
+                        Math.ceil(dims.y / Math.max(1, blockSize.y)) *
+                        Math.ceil(dims.z / Math.max(1, blockSize.z))
+                    })}
+                  </div>
+                )}
+                <label>
+                  {t('connector')}
+                  <div className="axis-row">
+                    {[
+                      ['pin', t('connPin')],
+                      ['square', t('connSquare')],
+                      ['hex', t('connHex')],
+                      ['dowel', t('connDowel')]
+                    ].map(([type, label]) => (
+                      <button
+                        key={type}
+                        className={s.cutParams.connectorType === type ? 'active' : ''}
+                        onClick={() => s.setCutParams({ connectorType: type })}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </label>
+                <label>
+                  {t('pinDiameter')}
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.5"
+                    value={s.cutParams.pinDiameter}
+                    onChange={(e) => s.setCutParams({ pinDiameter: +e.target.value })}
+                  />
+                </label>
+                <label>
+                  {t('pinLength')}
+                  <input
+                    type="number"
+                    min="2"
+                    step="0.5"
+                    value={s.cutParams.pinLength}
+                    onChange={(e) => s.setCutParams({ pinLength: +e.target.value })}
+                  />
+                </label>
+                <button className="primary" disabled={s.busy} onClick={onPuzzle}>
+                  {s.busy ? busyMsg || t('cutting') : t('generate')}
                 </button>
               </section>
             )}
