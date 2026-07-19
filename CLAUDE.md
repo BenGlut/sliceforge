@@ -54,6 +54,11 @@ Key invariants:
 
 ## Testing recipes
 
+> Packaged as personal skills: invoke `/sliceforge-verify` (test harness) and
+> `/sliceforge-ship` (docs→build→commit→push→watch-deploy pipeline) instead of
+> re-deriving the recipes below. Claude installs/updates these skills itself
+> in `~/.claude/skills/`.
+
 - **Headless geometry** (fast, decisive): node script importing
   `src/geometry/*` directly; build test shapes with three
   (`new THREE.BoxGeometry(...)`, `.toNonIndexed()` to simulate STL), assert on
