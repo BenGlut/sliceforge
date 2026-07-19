@@ -1,5 +1,4 @@
 import * as THREE from 'three'
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import Module from 'manifold-3d'
 
 let wasmPromise = null
@@ -15,12 +14,21 @@ async function getWasm() {
 
 function geometryToManifold(wasm, geometry) {
   const { Manifold, Mesh } = wasm
-  let g = geometry.index ? geometry : mergeVertices(geometry, 1e-5)
-  if (!g.index) throw new Error('mesh could not be indexed')
+  const pos = geometry.attributes.position
+  let triVerts
+  if (geometry.index) {
+    triVerts = new Uint32Array(geometry.index.array)
+  } else {
+    // Non-indexed (typical STL): sequential indices — Manifold's merge() welds
+    // the duplicates in WASM, which scales to millions of vertices where a
+    // JS hash-map weld would blow up.
+    triVerts = new Uint32Array(pos.count)
+    for (let i = 0; i < pos.count; i++) triVerts[i] = i
+  }
   const mesh = new Mesh({
     numProp: 3,
-    vertProperties: new Float32Array(g.attributes.position.array),
-    triVerts: new Uint32Array(g.index.array)
+    vertProperties: new Float32Array(pos.array),
+    triVerts
   })
   mesh.merge()
   return new Manifold(mesh)
