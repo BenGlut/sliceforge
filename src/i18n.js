@@ -25,7 +25,10 @@ const dict = {
     loadError: 'Failed to load {{name}}',
     cutError:
       'Cut failed. The mesh may contain geometric errors (flipped faces, holes, non-manifold edges).',
-    piece: 'Piece'
+    piece: 'Piece',
+    dims: 'Size: {{x}} × {{y}} × {{z}} mm',
+    tinyModel: 'Tiny model — was it exported in metres?',
+    scaleToMm: 'Convert to mm (×1000)'
   },
   fr: {
     import: 'Importer (STL/OBJ/GLB/3MF)',
@@ -53,7 +56,10 @@ const dict = {
     loadError: 'Erreur lors du chargement de {{name}}',
     cutError:
       'La découpe a échoué. Le maillage contient peut-être des erreurs géométriques (faces inversées, trous, arêtes non-manifold).',
-    piece: 'Pièce'
+    piece: 'Pièce',
+    dims: 'Taille : {{x}} × {{y}} × {{z}} mm',
+    tinyModel: 'Modèle minuscule — exporté en mètres ?',
+    scaleToMm: 'Convertir en mm (×1000)'
   }
 }
 

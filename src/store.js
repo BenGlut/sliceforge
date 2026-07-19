@@ -46,6 +46,19 @@ export const useStore = create((set) => ({
       return { pieces, history }
     }),
 
+  scaleModel: (factor) =>
+    set((s) => {
+      for (const p of s.pieces) {
+        p.geometry.scale(factor, factor, factor)
+        p.geometry.computeBoundingBox()
+      }
+      return {
+        pieces: [...s.pieces],
+        history: [],
+        plane: { ...s.plane, offset: s.plane.offset * factor }
+      }
+    }),
+
   togglePiece: (id) =>
     set((s) => ({
       pieces: s.pieces.map((p) => (p.id === id ? { ...p, visible: !p.visible } : p))

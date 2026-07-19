@@ -92,16 +92,18 @@ export default function App() {
     }
   }
 
-  const bboxRange = (() => {
+  const { bboxRange, dims } = (() => {
     const box = new THREE.Box3()
     s.pieces.forEach((p) => {
       p.geometry.computeBoundingBox()
       box.union(p.geometry.boundingBox)
     })
-    if (box.isEmpty()) return [-100, 100]
-    const size = box.getSize(new THREE.Vector3()).length()
-    return [-size, size]
+    if (box.isEmpty()) return { bboxRange: [-100, 100], dims: null }
+    const size = box.getSize(new THREE.Vector3())
+    const d = size.length()
+    return { bboxRange: [-d, d], dims: size }
   })()
+  const isTiny = dims && Math.max(dims.x, dims.y, dims.z) < 10
 
   return (
     <div
@@ -278,6 +280,21 @@ export default function App() {
               <h3>
                 {t('pieces')} ({s.pieces.length})
               </h3>
+              {dims && (
+                <div className="dims">
+                  {t('dims', {
+                    x: dims.x.toFixed(1),
+                    y: dims.y.toFixed(1),
+                    z: dims.z.toFixed(1)
+                  })}
+                </div>
+              )}
+              {isTiny && (
+                <div className="tiny-hint">
+                  {t('tinyModel')}
+                  <button onClick={() => s.scaleModel(1000)}>{t('scaleToMm')}</button>
+                </div>
+              )}
               <ul className="pieces">
                 {s.pieces.map((p) => (
                   <li key={p.id}>
