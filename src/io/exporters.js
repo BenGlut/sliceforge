@@ -16,11 +16,17 @@ function baseName(name) {
   return (name || 'model').replace(/\.[^.]+$/, '')
 }
 
-function piecesToScene(pieces) {
+// The viewer is Y-up; printing formats (STL/OBJ/3MF) are Z-up. Rotate a
+// COPY back to Z-up at export so slicers open the parts upright.
+export function toZUpGeometry(geometry) {
+  return geometry.clone().rotateX(Math.PI / 2)
+}
+
+function piecesToScene(pieces, zUp = false) {
   const scene = new THREE.Scene()
   const mat = new THREE.MeshStandardMaterial()
   for (const p of pieces) {
-    const mesh = new THREE.Mesh(p.geometry, mat)
+    const mesh = new THREE.Mesh(zUp ? toZUpGeometry(p.geometry) : p.geometry, mat)
     mesh.name = p.name
     scene.add(mesh)
   }
@@ -30,7 +36,7 @@ function piecesToScene(pieces) {
 export function exportSTL(pieces, modelName) {
   const exporter = new STLExporter()
   pieces.forEach((p, i) => {
-    const mesh = new THREE.Mesh(p.geometry, new THREE.MeshStandardMaterial())
+    const mesh = new THREE.Mesh(toZUpGeometry(p.geometry), new THREE.MeshStandardMaterial())
     const data = exporter.parse(mesh, { binary: true })
     download(
       new Blob([data], { type: 'model/stl' }),
@@ -40,7 +46,7 @@ export function exportSTL(pieces, modelName) {
 }
 
 export function exportOBJ(pieces, modelName) {
-  const data = new OBJExporter().parse(piecesToScene(pieces))
+  const data = new OBJExporter().parse(piecesToScene(pieces, true))
   download(new Blob([data], { type: 'model/obj' }), `${baseName(modelName)}.obj`)
 }
 
@@ -57,8 +63,9 @@ export function exportGLB(pieces, modelName) {
 export async function export3MF(pieces, modelName) {
   const objects = pieces
     .map((p, i) => {
-      const g = p.geometry.index ? p.geometry : null
-      const pos = p.geometry.attributes.position
+      const zg = toZUpGeometry(p.geometry)
+      const g = zg.index ? zg : null
+      const pos = zg.attributes.position
       let verts = ''
       for (let v = 0; v < pos.count; v++) {
         verts += `<vertex x="${pos.getX(v)}" y="${pos.getY(v)}" z="${pos.getZ(v)}"/>`

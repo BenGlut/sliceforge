@@ -39,24 +39,36 @@ function toSingleGeometry(rootOrGeometry) {
   return g
 }
 
+// 3D-printing formats are Z-up; the three.js scene is Y-up. Convert on
+// import so models stand upright like in any slicer, and convert back on
+// export (see exporters.js) so slicers receive them upright too.
+const Z_UP_FORMATS = new Set(['stl', 'obj', '3mf'])
+
 export async function importModelFile(file) {
   const ext = file.name.split('.').pop().toLowerCase()
   const buffer = await file.arrayBuffer()
+  let g
   switch (ext) {
     case 'stl':
-      return toSingleGeometry(new STLLoader().parse(buffer))
+      g = toSingleGeometry(new STLLoader().parse(buffer))
+      break
     case 'obj':
-      return toSingleGeometry(new OBJLoader().parse(new TextDecoder().decode(buffer)))
+      g = toSingleGeometry(new OBJLoader().parse(new TextDecoder().decode(buffer)))
+      break
     case '3mf':
-      return toSingleGeometry(new ThreeMFLoader().parse(buffer))
+      g = toSingleGeometry(new ThreeMFLoader().parse(buffer))
+      break
     case 'glb':
     case 'gltf': {
       const gltf = await new GLTFLoader().parseAsync(buffer, '')
-      return toSingleGeometry(gltf.scene)
+      g = toSingleGeometry(gltf.scene)
+      break
     }
     default:
       throw new Error(`unsupported format: .${ext}`)
   }
+  if (Z_UP_FORMATS.has(ext)) g.rotateX(-Math.PI / 2)
+  return g
 }
 
 export const ACCEPTED = '.stl,.obj,.glb,.gltf,.3mf'

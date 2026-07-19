@@ -41,6 +41,10 @@ src/
 ```
 
 Key invariants:
+- **Up-axis convention**: printing formats (STL/OBJ/3MF) are Z-up, the
+  viewer is Y-up. importers.js rotates -90° X on import; exporters rotate a
+  COPY back (+90° X, `toZUpGeometry`) for STL/OBJ/3MF so slicers open parts
+  upright. GLB/GLTF are natively Y-up — no conversion either way.
 - **Perf discipline**: never call `computeBoundingBox()` unconditionally —
   check `geometry.boundingBox` first (three caches it; `applyMatrix4` refreshes
   it). `setPieces` is SURGICAL: meshes reused by piece id, geometry pointers
