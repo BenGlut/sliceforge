@@ -26,6 +26,10 @@ const dict = {
     cutError:
       'Cut failed. The mesh may contain geometric errors (flipped faces, holes, non-manifold edges).',
     piece: 'Piece',
+    model: 'Model',
+    rotation: 'Rotation',
+    dimensions: 'Dimensions (mm)',
+    uniform: 'Keep proportions',
     dims: 'Size: {{x}} × {{y}} × {{z}} mm',
     tinyModel: 'Tiny model — was it exported in metres?',
     scaleToMm: 'Convert to mm (×1000)'
@@ -57,6 +61,10 @@ const dict = {
     cutError:
       'La découpe a échoué. Le maillage contient peut-être des erreurs géométriques (faces inversées, trous, arêtes non-manifold).',
     piece: 'Pièce',
+    model: 'Modèle',
+    rotation: 'Rotation',
+    dimensions: 'Dimensions (mm)',
+    uniform: 'Garder les proportions',
     dims: 'Taille : {{x}} × {{y}} × {{z}} mm',
     tinyModel: 'Modèle minuscule — exporté en mètres ?',
     scaleToMm: 'Convertir en mm (×1000)'

@@ -9,6 +9,8 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
 ## Features (v0.1)
 
 - **Import** STL / OBJ / GLB / GLTF / 3MF (drag & drop or file picker)
+- **Model setup** — per-axis rotation (±15° / ±90°), resize by target dimensions
+  (proportions locked or per-axis), one-click m→mm fix for metre-unit exports
 - **Plane cut** — axis + offset + two tilt angles, optional kerf (blade clearance)
 - **Alignment pins** — cylindrical peg/socket pairs auto-placed on the cut
   cross-section, with printable tolerance; pin diameter/length configurable

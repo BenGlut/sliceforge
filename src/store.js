@@ -1,4 +1,26 @@
+import * as THREE from 'three'
 import { create } from 'zustand'
+
+function modelCenter(pieces) {
+  const box = new THREE.Box3()
+  for (const p of pieces) {
+    p.geometry.computeBoundingBox()
+    box.union(p.geometry.boundingBox)
+  }
+  return box.getCenter(new THREE.Vector3())
+}
+
+function transformPieces(pieces, makeM) {
+  const c = modelCenter(pieces)
+  const m = new THREE.Matrix4()
+    .makeTranslation(c.x, c.y, c.z)
+    .multiply(makeM())
+    .multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z))
+  for (const p of pieces) {
+    p.geometry.applyMatrix4(m)
+    p.geometry.computeBoundingBox()
+  }
+}
 
 // pieces: [{ id, name, geometry, visible }] — geometry is a THREE.BufferGeometry
 export const useStore = create((set) => ({
@@ -44,6 +66,21 @@ export const useStore = create((set) => ({
       const history = [...s.history]
       const pieces = history.pop()
       return { pieces, history }
+    }),
+
+  rotateModel: (axis, deg) =>
+    set((s) => {
+      const rad = THREE.MathUtils.degToRad(deg)
+      transformPieces(s.pieces, () =>
+        new THREE.Matrix4()[`makeRotation${axis.toUpperCase()}`](rad)
+      )
+      return { pieces: [...s.pieces], history: [] }
+    }),
+
+  resizeModel: (fx, fy, fz) =>
+    set((s) => {
+      transformPieces(s.pieces, () => new THREE.Matrix4().makeScale(fx, fy, fz))
+      return { pieces: [...s.pieces], history: [] }
     }),
 
   scaleModel: (factor) =>

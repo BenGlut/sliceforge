@@ -14,6 +14,7 @@ export default function App() {
   const viewerRef = useRef(null)
   const fileRef = useRef(null)
   const [showPlane, setShowPlane] = useState(true)
+  const [uniformScale, setUniformScale] = useState(true)
 
   useEffect(() => {
     const viewer = new Viewer(canvasRef.current)
@@ -157,6 +158,74 @@ export default function App() {
         {s.pieces.length > 0 && (
           <aside>
             <section>
+              <h3>{t('model')}</h3>
+              {dims && (
+                <div className="dims">
+                  {t('dims', {
+                    x: dims.x.toFixed(1),
+                    y: dims.y.toFixed(1),
+                    z: dims.z.toFixed(1)
+                  })}
+                </div>
+              )}
+              {isTiny && (
+                <div className="tiny-hint">
+                  {t('tinyModel')}
+                  <button onClick={() => s.scaleModel(1000)}>{t('scaleToMm')}</button>
+                </div>
+              )}
+              <label>
+                {t('dimensions')}
+                <div className="dim-row">
+                  {['x', 'y', 'z'].map((axis) => (
+                    <input
+                      key={axis + dims?.[axis]?.toFixed(2)}
+                      type="number"
+                      min="0.1"
+                      step="1"
+                      defaultValue={dims ? +dims[axis].toFixed(1) : 0}
+                      aria-label={axis.toUpperCase()}
+                      onBlur={(e) => {
+                        const v = +e.target.value
+                        if (!dims || !(v > 0) || Math.abs(v - dims[axis]) < 1e-3) return
+                        const f = v / dims[axis]
+                        if (uniformScale) s.resizeModel(f, f, f)
+                        else
+                          s.resizeModel(
+                            axis === 'x' ? f : 1,
+                            axis === 'y' ? f : 1,
+                            axis === 'z' ? f : 1
+                          )
+                      }}
+                      onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+                    />
+                  ))}
+                </div>
+              </label>
+              <label className="inline">
+                <input
+                  type="checkbox"
+                  checked={uniformScale}
+                  onChange={(e) => setUniformScale(e.target.checked)}
+                />
+                {t('uniform')}
+              </label>
+              <label>
+                {t('rotation')}
+                {['x', 'y', 'z'].map((axis) => (
+                  <div className="rot-row" key={axis}>
+                    <span className="rot-axis">{axis.toUpperCase()}</span>
+                    {[-90, -15, 15, 90].map((deg) => (
+                      <button key={deg} onClick={() => s.rotateModel(axis, deg)}>
+                        {deg > 0 ? `+${deg}°` : `${deg}°`}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </label>
+            </section>
+
+            <section>
               <h3>
                 {t('planeCut')}
                 <label className="inline">
@@ -280,21 +349,6 @@ export default function App() {
               <h3>
                 {t('pieces')} ({s.pieces.length})
               </h3>
-              {dims && (
-                <div className="dims">
-                  {t('dims', {
-                    x: dims.x.toFixed(1),
-                    y: dims.y.toFixed(1),
-                    z: dims.z.toFixed(1)
-                  })}
-                </div>
-              )}
-              {isTiny && (
-                <div className="tiny-hint">
-                  {t('tinyModel')}
-                  <button onClick={() => s.scaleModel(1000)}>{t('scaleToMm')}</button>
-                </div>
-              )}
               <ul className="pieces">
                 {s.pieces.map((p) => (
                   <li key={p.id}>
