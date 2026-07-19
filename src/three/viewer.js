@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { TransformControls } from 'three/addons/controls/TransformControls.js'
 
-const PIECE_COLORS = [0x5b8dee, 0xee8a5b, 0x62c48a, 0xd46bc8, 0xe0c34f, 0x6bd4cf, 0x9a7be4]
+export const PIECE_COLORS = [0x5b8dee, 0xee8a5b, 0x62c48a, 0xd46bc8, 0xe0c34f, 0x6bd4cf, 0x9a7be4]
 
 export class Viewer {
   constructor(canvas) {
@@ -10,7 +10,7 @@ export class Viewer {
     // Full retina (x2) is wasted on multi-million-triangle scenes — cap it.
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(0x14161c)
+    this.scene.background = new THREE.Color(0x0e1014)
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 5000)
     this.camera.position.set(120, 90, 120)
     this.controls = new OrbitControls(this.camera, canvas)

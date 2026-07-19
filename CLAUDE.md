@@ -52,6 +52,11 @@ Key invariants:
   clicking away or Esc clears. Hit test = bounding-box raycast (O(pieces),
   instant on huge meshes, but generous around diagonal views) — upgrade to
   three-mesh-bvh if per-triangle precision is ever needed.
+- **Design system (Apple/BambuLab-inspired)**: tokens in `:root` of
+  `src/style.css` (surfaces, `--accent` #2f6bff, radii, shadows) — always use
+  tokens, never raw colors. Floating glass panels (blur) over the viewport,
+  pill toolbar, segmented controls (`.axis-row`), custom sliders. Piece colors
+  come from `PIECE_COLORS` (viewer.js) and are echoed as dots in the list.
 - **Icons**: inline SVG components in `src/icons.jsx` (stroke, currentColor).
   NO emoji anywhere in the UI.
 - **Tool-based UI (CAD standard)**: plane helper, volume box and rotation

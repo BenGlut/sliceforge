@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useStore, newPieceId } from './store.js'
 import { makeT } from './i18n.js'
-import { Viewer } from './three/viewer.js'
+import { Viewer, PIECE_COLORS } from './three/viewer.js'
 import { importModelFile, ACCEPTED } from './io/importers.js'
 import { exportSTL, exportOBJ, exportGLB, export3MF } from './io/exporters.js'
 import { planeBasis } from './geometry/plane.js'
@@ -508,7 +508,7 @@ export default function App() {
                 {t('pieces')} ({s.pieces.length})
               </h3>
               <ul className="pieces">
-                {s.pieces.map((p) => (
+                {s.pieces.map((p, i) => (
                   <li key={p.id} className={p.id === selectedId ? 'selected' : ''}>
                     <label className="inline">
                       <input
@@ -517,6 +517,13 @@ export default function App() {
                         onChange={() => s.togglePiece(p.id)}
                       />
                     </label>
+                    <span
+                      className="piece-dot"
+                      style={{
+                        background:
+                          '#' + PIECE_COLORS[i % PIECE_COLORS.length].toString(16).padStart(6, '0')
+                      }}
+                    />
                     <span
                       className="piece-name"
                       onClick={() => {
