@@ -9,7 +9,9 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
 ## Features (v0.1)
 
 - **Import** STL / OBJ / GLB / GLTF / 3MF (drag & drop or file picker)
-- **Model setup** — per-axis rotation (±15° / ±90°), in-view rotation wheel,
+- **Model setup** — model always lands centred and resting on the plate
+  (auto-grounded after every rotation/resize), right-click menu to re-centre
+  or refit the view, per-axis rotation (±15° / ±90°), in-view rotation wheel,
   place-on-face (click a face, the model lies flat on it), resize by target
   dimensions (proportions locked or per-axis), one-click m→mm fix for
   metre-unit exports

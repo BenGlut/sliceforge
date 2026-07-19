@@ -10,6 +10,23 @@ function modelCenter(pieces) {
   return box.getCenter(new THREE.Vector3())
 }
 
+// Slicer invariant: the plate is fixed at y=0 and the model always RESTS on
+// it, centred — never floating. Re-applied after anything that moves geometry.
+function groundAndCenter(pieces) {
+  if (!pieces.length) return
+  const box = new THREE.Box3()
+  for (const p of pieces) {
+    if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
+    box.union(p.geometry.boundingBox)
+  }
+  const c = box.getCenter(new THREE.Vector3())
+  const dx = -c.x
+  const dy = -box.min.y
+  const dz = -c.z
+  if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4 && Math.abs(dz) < 1e-4) return
+  for (const p of pieces) p.geometry.translate(dx, dy, dz)
+}
+
 function transformPieces(pieces, makeM) {
   const c = modelCenter(pieces)
   const m = new THREE.Matrix4()
@@ -18,6 +35,7 @@ function transformPieces(pieces, makeM) {
     .multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z))
   // applyMatrix4 refreshes an already-computed boundingBox itself.
   for (const p of pieces) p.geometry.applyMatrix4(m)
+  groundAndCenter(pieces)
 }
 
 // pieces: [{ id, name, geometry, visible }] — geometry is a THREE.BufferGeometry
@@ -48,13 +66,22 @@ export const useStore = create((set) => ({
   },
   setCutParams: (patch) => set((s) => ({ cutParams: { ...s.cutParams, ...patch } })),
 
-  setModel: (name, geometry) =>
-    set({
+  setModel: (name, geometry) => {
+    const pieces = [{ id: 1, name, geometry, visible: true }]
+    groundAndCenter(pieces)
+    return set({
       modelName: name,
-      pieces: [{ id: 1, name, geometry, visible: true }],
+      pieces,
       history: [],
       explode: 0,
       error: null
+    })
+  },
+
+  centerModel: () =>
+    set((s) => {
+      groundAndCenter(s.pieces)
+      return { pieces: [...s.pieces] }
     }),
 
   replacePiece: (id, newPieces) =>
@@ -100,6 +127,7 @@ export const useStore = create((set) => ({
       for (const p of s.pieces) {
         p.geometry.scale(factor, factor, factor)
       }
+      groundAndCenter(s.pieces)
       return {
         pieces: [...s.pieces],
         history: [],

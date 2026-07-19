@@ -24,6 +24,14 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null)
   const [blockSize, setBlockSizeState] = useState({ x: 220, y: 220, z: 250 })
   const [busyMsg, setBusyMsg] = useState(null)
+  const [ctxMenu, setCtxMenu] = useState(null)
+
+  useEffect(() => {
+    if (!ctxMenu) return
+    const close = () => setCtxMenu(null)
+    window.addEventListener('pointerdown', close)
+    return () => window.removeEventListener('pointerdown', close)
+  }, [ctxMenu])
 
   useEffect(() => {
     // One Viewer per canvas, ever: StrictMode double-mounts effects in dev,
@@ -48,8 +56,8 @@ export default function App() {
         new THREE.Vector3(0, -1, 0)
       )
       useStore.getState().rotateModelQuaternion(q)
-      requestAnimationFrame(() => viewer.groundGrid())
     }
+    viewer.onContextMenu = (x, y) => setCtxMenu({ x, y })
     if (import.meta.env.DEV) window.__sfViewer = viewer
     viewerRef.current = viewer
   }, [])
@@ -357,6 +365,30 @@ export default function App() {
           )}
           {!s.pieces.length && <div className="drop-hint">{t('dropHint')}</div>}
           {s.busy && <div className="busy">{busyMsg || t('cutting')}</div>}
+          {ctxMenu && (
+            <div
+              className="ctx-menu"
+              style={{ left: ctxMenu.x, top: ctxMenu.y }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => {
+                  s.centerModel()
+                  setCtxMenu(null)
+                }}
+              >
+                {t('centerModel')}
+              </button>
+              <button
+                onClick={() => {
+                  viewerRef.current?.fitCamera()
+                  setCtxMenu(null)
+                }}
+              >
+                {t('fitView')}
+              </button>
+            </div>
+          )}
           {s.error && (
             <div className="error" onClick={() => s.setError(null)}>
               {s.error}

@@ -68,9 +68,20 @@ export class Viewer {
     this._raycaster = new THREE.Raycaster()
     this._downPos = null
     canvas.addEventListener('pointerdown', (e) => {
-      this._downPos = [e.clientX, e.clientY]
+      if (e.button === 2) this._rDownPos = [e.clientX, e.clientY]
+      else this._downPos = [e.clientX, e.clientY]
+    })
+    // Right-CLICK (not a right-drag pan) opens the context menu.
+    this.onContextMenu = null
+    canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+      const down = this._rDownPos
+      this._rDownPos = null
+      if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return
+      this.onContextMenu?.(e.clientX, e.clientY)
     })
     canvas.addEventListener('pointerup', (e) => {
+      if (e.button !== 0) return
       const down = this._downPos
       this._downPos = null
       if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return
@@ -150,15 +161,22 @@ export class Viewer {
     this.setExplode(explode)
     if (this.gizmoHelper.visible) this.pivot.position.copy(this.modelCenter)
 
-    if (!box.isEmpty() && refit) {
-      const size = box.getSize(new THREE.Vector3()).length()
-      const d = Math.max(size, 10)
-      this.camera.position
-        .copy(this.modelCenter)
-        .add(new THREE.Vector3(0.8, 0.6, 0.8).multiplyScalar(d))
-      this.controls.target.copy(this.modelCenter)
-      this.grid.position.y = box.min.y
+    if (!box.isEmpty() && refit) this.fitCamera(box)
+  }
+
+  fitCamera(box = null) {
+    if (!box) {
+      box = new THREE.Box3()
+      for (const m of this.piecesGroup.children) {
+        if (!m.geometry.boundingBox) m.geometry.computeBoundingBox()
+        box.union(m.geometry.boundingBox.clone().translate(m.position))
+      }
+      if (box.isEmpty()) return
     }
+    const center = box.getCenter(new THREE.Vector3())
+    const d = Math.max(box.getSize(new THREE.Vector3()).length(), 10)
+    this.camera.position.copy(center).add(new THREE.Vector3(0.8, 0.6, 0.8).multiplyScalar(d))
+    this.controls.target.copy(center)
   }
 
   setExplode(factor) {
@@ -170,14 +188,6 @@ export class Viewer {
     }
   }
 
-  groundGrid() {
-    const box = new THREE.Box3()
-    for (const m of this.piecesGroup.children) {
-      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox()
-      box.union(m.geometry.boundingBox.clone().translate(m.position))
-    }
-    if (!box.isEmpty()) this.grid.position.y = box.min.y
-  }
 
   setSelected(pieceId) {
     this.selectedPieceId = pieceId

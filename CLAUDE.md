@@ -41,6 +41,11 @@ src/
 ```
 
 Key invariants:
+- **Plate invariant**: the grid IS the plate, fixed at y=0. `groundAndCenter`
+  (store.js) re-seats the model (min.y=0, centred x/z) after import and every
+  model-level transform — a model must never float or sit off-plate. Cuts
+  don't move pieces. Right-click in the viewport = context menu (centre
+  model / fit view); right-drag stays orbit-pan.
 - **Up-axis convention**: printing formats (STL/OBJ/3MF) are Z-up, the
   viewer is Y-up. importers.js rotates -90° X on import; exporters rotate a
   COPY back (+90° X, `toZUpGeometry`) for STL/OBJ/3MF so slicers open parts
