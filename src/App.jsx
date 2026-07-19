@@ -430,6 +430,14 @@ export default function App() {
                       onChange={(e) => s.setCutParams({ tolerance: +e.target.value })}
                     />
                   </label>
+                  <label className="inline">
+                    <input
+                      type="checkbox"
+                      checked={s.cutParams.taper}
+                      onChange={(e) => s.setCutParams({ taper: e.target.checked })}
+                    />
+                    {t('taper')}
+                  </label>
                 </>
               )}
               <button className="primary" disabled={s.busy} onClick={onCut}>

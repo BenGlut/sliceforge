@@ -16,7 +16,8 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
   whatever falls inside it (a hand, a head) as its own piece
 - **Alignment pins** — cylindrical peg/socket pairs auto-placed across the cut
   cross-section (several per region, spread to lock rotation), printable
-  tolerance; pin diameter/length configurable
+  tolerance; pin diameter/length configurable; tapered option (tip 80%)
+  for easy assembly
 - **Mesh simplification** — decimate heavy scans to a chosen percentage
   (meshoptimizer), model stays cuttable
 - **Watertight output** — all booleans run through [Manifold](https://github.com/elalish/manifold)
@@ -30,7 +31,7 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
 
 - [ ] Shape cut — click a protruding feature, auto-select the connected shell
 - [ ] Color cut — split by vertex-color / texture zones (multi-material printing)
-- [ ] Dovetail / tapered connectors, manual pin placement
+- [ ] Dovetail connectors, manual pin placement
 - [ ] Mesh repair for non-manifold inputs
 - [ ] Orthographic view, measurement tools
 

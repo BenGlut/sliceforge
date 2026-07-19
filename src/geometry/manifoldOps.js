@@ -177,9 +177,12 @@ export async function planeCut(geometry, plane, params) {
       const tol = Math.max(0, params.tolerance)
       const section = solid.slice(0)
       cleanup.push(section)
+      // Tapered pegs (tip 80% of base radius) slide into their socket without
+      // fighting the first layers — much easier to assemble than straight pins.
+      const rTip = params.taper ? r * 0.8 : r
       for (const [x, y] of pinSpots(section.toPolygons(), r, tol)) {
-        const peg = Manifold.cylinder(h, r, r, 48, true).translate([x, y, 0])
-        const socket = Manifold.cylinder(h + 2 * tol, r + tol, r + tol, 48, true).translate([
+        const peg = Manifold.cylinder(h, r, rTip, 48, true).translate([x, y, 0])
+        const socket = Manifold.cylinder(h + 2 * tol, r + tol, rTip + tol, 48, true).translate([
           x,
           y,
           0

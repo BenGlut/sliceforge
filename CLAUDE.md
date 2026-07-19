@@ -91,5 +91,5 @@ mentions anywhere in the repo.
 6. ~~Volume cut~~ (oriented box + TransformControls translate/rotate/scale; cut in box-local frame vs unit cube; no pins yet)
 7. Shape cut (click a protruding feature → connected-shell selection)
 8. Color cut (vertex colors / texture zones) — needs color-preserving import
-9. Dovetail / tapered connectors, manual pin placement
+9. Tapered pins ~~done~~ (tip 80% of base, default ON); dovetail + manual pin placement remain
 10. Mesh repair for non-manifold inputs
