@@ -62,6 +62,8 @@ export class Viewer {
     // gizmo grab) raycasts the pieces' bounding boxes — O(pieces), instant
     // even on multi-million-triangle meshes.
     this.onPieceClick = null
+    this.onFacePick = null
+    this.faceMode = false
     this.selectedPieceId = null
     this._raycaster = new THREE.Raycaster()
     this._downPos = null
@@ -74,6 +76,7 @@ export class Viewer {
       if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return
       if (this.gizmo.dragging || this.volGizmo?.dragging) return
       const rect = canvas.getBoundingClientRect()
+      if (!rect.width || !rect.height) return
       this._raycaster.setFromCamera(
         new THREE.Vector2(
           ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -81,6 +84,16 @@ export class Viewer {
         ),
         this.camera
       )
+      if (this.faceMode) {
+        // Place-on-face: precise triangle raycast (meshes carry no rotation,
+        // so the face normal is already in world space).
+        const hits = this._raycaster.intersectObjects(
+          this.piecesGroup.children.filter((m) => m.visible),
+          false
+        )
+        if (hits[0]?.face) this.onFacePick?.(hits[0].face.normal.clone())
+        return
+      }
       let best = null
       const target = new THREE.Vector3()
       for (const mesh of this.piecesGroup.children) {
@@ -97,6 +110,7 @@ export class Viewer {
 
     this._onResize = () => {
       const { clientWidth: w, clientHeight: h } = canvas.parentElement
+      if (!w || !h) return
       this.renderer.setSize(w, h, false)
       this.camera.aspect = w / h
       this.camera.updateProjectionMatrix()
@@ -154,6 +168,15 @@ export class Viewer {
       mesh.geometry.boundingBox.getCenter(c).sub(this.modelCenter)
       mesh.position.copy(c.multiplyScalar(factor))
     }
+  }
+
+  groundGrid() {
+    const box = new THREE.Box3()
+    for (const m of this.piecesGroup.children) {
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox()
+      box.union(m.geometry.boundingBox.clone().translate(m.position))
+    }
+    if (!box.isEmpty()) this.grid.position.y = box.min.y
   }
 
   setSelected(pieceId) {

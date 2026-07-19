@@ -35,6 +35,14 @@ export const IconRotate = () => (
   </svg>
 )
 
+export const IconFaceDown = () => (
+  <svg {...base}>
+    <line x1="3" y1="20.5" x2="21" y2="20.5" />
+    <line x1="12" y1="3.5" x2="12" y2="14.5" />
+    <polyline points="7.5 10.5 12 15 16.5 10.5" />
+  </svg>
+)
+
 export const IconLogo = () => (
   <svg {...base} width={18} height={18}>
     <path d="M12 2.5 21 7v10l-9 4.5L3 17V7l9-4.5Z" />

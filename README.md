@@ -9,8 +9,10 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
 ## Features (v0.1)
 
 - **Import** STL / OBJ / GLB / GLTF / 3MF (drag & drop or file picker)
-- **Model setup** — per-axis rotation (±15° / ±90°), resize by target dimensions
-  (proportions locked or per-axis), one-click m→mm fix for metre-unit exports
+- **Model setup** — per-axis rotation (±15° / ±90°), in-view rotation wheel,
+  place-on-face (click a face, the model lies flat on it), resize by target
+  dimensions (proportions locked or per-axis), one-click m→mm fix for
+  metre-unit exports
 - **Plane cut** — axis + offset + two tilt angles, optional kerf (blade clearance)
 - **Volume cut** — position/rotate/scale a box in the viewport and detach
   whatever falls inside it (a hand, a head) as its own piece

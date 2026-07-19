@@ -7,7 +7,7 @@ import { importModelFile, ACCEPTED } from './io/importers.js'
 import { exportSTL, exportOBJ, exportGLB, export3MF } from './io/exporters.js'
 import { planeBasis } from './geometry/plane.js'
 import { planeCutAsync, simplifyAsync, volumeCutAsync } from './geometry/cutClient.js'
-import { IconCut, IconBox, IconRotate, IconLogo } from './icons.jsx'
+import { IconCut, IconBox, IconRotate, IconFaceDown, IconLogo } from './icons.jsx'
 
 export default function App() {
   const s = useStore()
@@ -24,7 +24,12 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null)
 
   useEffect(() => {
-    const viewer = new Viewer(canvasRef.current)
+    // One Viewer per canvas, ever: StrictMode double-mounts effects in dev,
+    // and a second WebGL context on the same canvas leaves the first one
+    // half-alive (stale camera matrices -> NaN raycasts).
+    const canvas = canvasRef.current
+    const viewer = canvas.__viewer ?? new Viewer(canvas)
+    canvas.__viewer = viewer
     viewer.onRotateEnd = (q) => useStore.getState().rotateModelQuaternion(q)
     // CAD selection: clicking a piece selects it and summons the rotation
     // gizmo; clicking empty space clears both.
@@ -33,9 +38,18 @@ export default function App() {
       if (id) setActiveTool((tool) => tool ?? 'rotate')
       else setActiveTool((tool) => (tool === 'rotate' ? null : tool))
     }
+    // Place-on-face (OrcaSlicer-style): rotate the model so the clicked
+    // face lies flat on the grid, then re-ground the grid under it.
+    viewer.onFacePick = (normal) => {
+      const q = new THREE.Quaternion().setFromUnitVectors(
+        normal.normalize(),
+        new THREE.Vector3(0, -1, 0)
+      )
+      useStore.getState().rotateModelQuaternion(q)
+      requestAnimationFrame(() => viewer.groundGrid())
+    }
     if (import.meta.env.DEV) window.__sfViewer = viewer
     viewerRef.current = viewer
-    return () => viewer.dispose()
   }, [])
 
 
@@ -57,6 +71,10 @@ export default function App() {
   useEffect(() => {
     viewerRef.current?.setSelected(selectedId)
   }, [selectedId, s.pieces])
+
+  useEffect(() => {
+    if (viewerRef.current) viewerRef.current.faceMode = activeTool === 'face'
+  }, [activeTool])
 
   useEffect(() => {
     if (!activeTool && !selectedId) return
@@ -244,14 +262,15 @@ export default function App() {
       </header>
 
       <div className="main">
-        <div className="canvas-wrap">
+        <div className={`canvas-wrap${activeTool === 'face' ? ' face-mode' : ''}`}>
           <canvas ref={canvasRef} />
           {s.pieces.length > 0 && (
             <div className="viewport-toolbar">
               {[
                 ['plane', <IconCut key="i" />, t('planeCut')],
                 ['volume', <IconBox key="i" />, t('volumeCut')],
-                ['rotate', <IconRotate key="i" />, t('modeRotate')]
+                ['rotate', <IconRotate key="i" />, t('modeRotate')],
+                ['face', <IconFaceDown key="i" />, t('placeFace')]
               ].map(([tool, icon, label]) => (
                 <button
                   key={tool}

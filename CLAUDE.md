@@ -93,7 +93,9 @@ Key invariants:
   `input`/`focusout` events (React listens to focusout, NOT blur). In dev the
   viewer is exposed as `window.__sfViewer` for gizmo/scene assertions.
   Synthetic left_click_drag does NOT reach the canvas in the browser pane —
-  test drags in the owner's Chrome instead, or simulate via `__sfViewer`.
+  test drags in the owner's Chrome instead, or simulate via `__sfViewer`. The pane can also
+  report canvas getBoundingClientRect() as 0x0 — click-coordinate features
+  must be verified in the owner's Chrome with real clicks.
 - **Owner's Chrome** (real-world check): serve a local file to the HTTPS page
   via a localhost CORS server (`python3` one-liner), fetch + DataTransfer +
   drop. Kill the server afterwards (it exposes the folder it serves).
@@ -116,6 +118,8 @@ mentions anywhere in the repo.
 4. ~~Multiple pins per cut face~~ (grid candidates + ring-fit test + greedy spread, max 5/region)
 5. ~~Mesh decimation~~ (weld via Manifold then MeshoptSimplifier, % in Model section)
 6. ~~Volume cut~~ (oriented box + TransformControls translate/rotate/scale; cut in box-local frame vs unit cube; no pins yet)
+6b. ~~Place-on-face~~ (OrcaSlicer-style: face tool -> click a face -> model
+    rotated so that face lies on the grid; grid re-grounds under it)
 7. Shape cut (click a protruding feature → connected-shell selection)
 8. Color cut (vertex colors / texture zones) — needs color-preserving import
 9. Tapered pins ~~done~~ (tip 80% of base, default ON); dovetail + manual pin placement remain
