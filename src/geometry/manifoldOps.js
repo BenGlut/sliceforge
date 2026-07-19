@@ -211,6 +211,35 @@ export async function planeCut(geometry, plane, params) {
 }
 
 /**
+ * Split a solid with an oriented box (unit cube transformed by matrixArray,
+ * column-major Matrix4). Returns [outside, inside] — 1 piece if the box
+ * misses (or swallows) the solid. Cut in the box's local frame so Manifold
+ * only ever sees an axis-aligned unit cube.
+ */
+export async function volumeCut(geometry, matrixArray) {
+  const wasm = await getWasm()
+  const { Manifold } = wasm
+  const m = new THREE.Matrix4().fromArray(matrixArray)
+  const inv = m.clone().invert()
+  const gLocal = geometry.clone().applyMatrix4(inv)
+  const solid = geometryToManifold(wasm, gLocal)
+  gLocal.dispose()
+  const cube = Manifold.cube([1, 1, 1], true)
+  const out = []
+  for (const part of [solid.subtract(cube), solid.intersect(cube)]) {
+    if (!part.isEmpty()) {
+      const g = manifoldToGeometry(part).applyMatrix4(m)
+      g.computeVertexNormals()
+      out.push(g)
+    }
+    part.delete()
+  }
+  cube.delete()
+  solid.delete()
+  return out
+}
+
+/**
  * Reduce the triangle count to ~ratio (0..1) of the current one.
  * The mesh is first welded through Manifold (clean shared index), then
  * decimated with meshoptimizer's edge-collapse simplifier, which preserves

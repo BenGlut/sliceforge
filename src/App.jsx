@@ -6,7 +6,7 @@ import { Viewer } from './three/viewer.js'
 import { importModelFile, ACCEPTED } from './io/importers.js'
 import { exportSTL, exportOBJ, exportGLB, export3MF } from './io/exporters.js'
 import { planeBasis } from './geometry/plane.js'
-import { planeCutAsync, simplifyAsync } from './geometry/cutClient.js'
+import { planeCutAsync, simplifyAsync, volumeCutAsync } from './geometry/cutClient.js'
 
 export default function App() {
   const s = useStore()
@@ -18,6 +18,8 @@ export default function App() {
   const [uniformScale, setUniformScale] = useState(true)
 
   const [gizmoOn, setGizmoOn] = useState(true)
+  const [volumeOn, setVolumeOn] = useState(false)
+  const [volumeMode, setVolumeMode] = useState('translate')
 
   useEffect(() => {
     const viewer = new Viewer(canvasRef.current)
@@ -33,8 +35,43 @@ export default function App() {
   }, [s.pieces])
 
   useEffect(() => {
-    viewerRef.current?.setGizmo(gizmoOn && s.pieces.length > 0)
-  }, [gizmoOn, s.pieces])
+    viewerRef.current?.setGizmo(gizmoOn && !volumeOn && s.pieces.length > 0)
+  }, [gizmoOn, volumeOn, s.pieces])
+
+  useEffect(() => {
+    viewerRef.current?.setVolumeBox(volumeOn && s.pieces.length > 0)
+  }, [volumeOn, s.pieces.length > 0])
+
+  useEffect(() => {
+    viewerRef.current?.setVolumeMode(volumeMode)
+  }, [volumeMode])
+
+  async function onVolumeCut() {
+    s.setBusy(true)
+    s.setError(null)
+    try {
+      const matrix = viewerRef.current.getVolumeMatrix()
+      const targets = s.pieces.filter((p) => p.visible)
+      for (const piece of targets) {
+        const parts = await volumeCutAsync(piece.geometry, matrix)
+        if (parts.length < 2) continue
+        useStore.getState().replacePiece(
+          piece.id,
+          parts.map((g, i) => ({
+            id: newPieceId(),
+            name: `${piece.name.replace(/\.[^.]+$/, '')}_${i + 1}`,
+            geometry: g,
+            visible: true
+          }))
+        )
+      }
+    } catch (e) {
+      console.error(e)
+      s.setError(t('cutError'))
+    } finally {
+      s.setBusy(false)
+    }
+  }
 
   useEffect(() => {
     viewerRef.current?.setExplode(s.explode)
@@ -399,6 +436,41 @@ export default function App() {
                 {s.busy ? t('cutting') : t('cut')}
               </button>
               {s.history.length > 0 && <button onClick={s.undo}>{t('undo')}</button>}
+            </section>
+
+            <section>
+              <h3>
+                {t('volumeCut')}
+                <label className="inline">
+                  <input
+                    type="checkbox"
+                    checked={volumeOn}
+                    onChange={(e) => setVolumeOn(e.target.checked)}
+                  />
+                </label>
+              </h3>
+              {volumeOn && (
+                <>
+                  <div className="axis-row">
+                    {[
+                      ['translate', t('modeMove')],
+                      ['rotate', t('modeRotate')],
+                      ['scale', t('modeScale')]
+                    ].map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        className={volumeMode === mode ? 'active' : ''}
+                        onClick={() => setVolumeMode(mode)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="primary" disabled={s.busy} onClick={onVolumeCut}>
+                    {s.busy ? t('cutting') : t('detach')}
+                  </button>
+                </>
+              )}
             </section>
 
             <section>

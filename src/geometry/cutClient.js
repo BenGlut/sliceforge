@@ -50,3 +50,5 @@ export const planeCutAsync = (geometry, plane, params) =>
   runOp('planeCut', geometry, { plane, params })
 
 export const simplifyAsync = (geometry, ratio) => runOp('simplify', geometry, { params: { ratio } })
+
+export const volumeCutAsync = (geometry, matrix) => runOp('volumeCut', geometry, { params: { matrix } })

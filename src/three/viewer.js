@@ -109,6 +109,62 @@ export class Viewer {
     }
   }
 
+  setVolumeBox(enabled) {
+    if (enabled && this.piecesGroup.children.length) {
+      if (!this.volBox) {
+        this.volBox = new THREE.Mesh(
+          new THREE.BoxGeometry(1, 1, 1),
+          new THREE.MeshBasicMaterial({
+            color: 0xffb347,
+            transparent: true,
+            opacity: 0.22,
+            depthWrite: false
+          })
+        )
+        this.volBox.add(
+          new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+            new THREE.LineBasicMaterial({ color: 0xffb347 })
+          )
+        )
+        this.scene.add(this.volBox)
+        this.volGizmo = new TransformControls(this.camera, this.renderer.domElement)
+        this.volGizmo.setSize(0.9)
+        this.volGizmoHelper = this.volGizmo.getHelper()
+        this.scene.add(this.volGizmoHelper)
+        this.volGizmo.addEventListener('dragging-changed', (e) => {
+          this.controls.enabled = !e.value
+        })
+      }
+      const box = new THREE.Box3()
+      for (const mesh of this.piecesGroup.children) box.union(mesh.geometry.boundingBox)
+      const size = box.getSize(new THREE.Vector3())
+      this.volBox.position.copy(this.modelCenter)
+      this.volBox.scale.set(
+        Math.max(1, size.x * 0.4),
+        Math.max(1, size.y * 0.4),
+        Math.max(1, size.z * 0.4)
+      )
+      this.volBox.rotation.set(0, 0, 0)
+      this.volBox.visible = true
+      this.volGizmo.attach(this.volBox)
+      this.volGizmoHelper.visible = true
+    } else if (this.volBox) {
+      this.volGizmo.detach()
+      this.volGizmoHelper.visible = false
+      this.volBox.visible = false
+    }
+  }
+
+  setVolumeMode(mode) {
+    this.volGizmo?.setMode(mode)
+  }
+
+  getVolumeMatrix() {
+    this.volBox.updateMatrix()
+    return this.volBox.matrix.toArray()
+  }
+
   setGizmo(enabled) {
     if (enabled && this.piecesGroup.children.length) {
       this.pivot.position.copy(this.modelCenter)

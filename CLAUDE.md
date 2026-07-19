@@ -88,7 +88,7 @@ mentions anywhere in the repo.
 3. ~~Web Worker for cutting~~ (cut/simplify run in a module worker, transferables)
 4. ~~Multiple pins per cut face~~ (grid candidates + ring-fit test + greedy spread, max 5/region)
 5. ~~Mesh decimation~~ (weld via Manifold then MeshoptSimplifier, % in Model section)
-6. Volume cut (box gizmo, detach a hand/head)
+6. ~~Volume cut~~ (oriented box + TransformControls translate/rotate/scale; cut in box-local frame vs unit cube; no pins yet)
 7. Shape cut (click a protruding feature → connected-shell selection)
 8. Color cut (vertex colors / texture zones) — needs color-preserving import
 9. Dovetail / tapered connectors, manual pin placement

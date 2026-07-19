@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { planeCut, simplifyGeometry } from './manifoldOps.js'
+import { planeCut, simplifyGeometry, volumeCut } from './manifoldOps.js'
 
 function toGeometry({ positions, index }) {
   const g = new THREE.BufferGeometry()
@@ -23,6 +23,7 @@ self.onmessage = async (e) => {
     let results
     if (op === 'planeCut') results = await planeCut(g, plane, params)
     else if (op === 'simplify') results = [await simplifyGeometry(g, params.ratio)]
+    else if (op === 'volumeCut') results = await volumeCut(g, params.matrix)
     else throw new Error(`unknown op ${op}`)
     const payload = results.map(toPayload)
     const transfer = payload.flatMap((p) =>
