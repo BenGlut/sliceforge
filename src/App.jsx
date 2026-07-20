@@ -70,6 +70,32 @@ export default function App() {
     viewerRef.current = viewer
   }, [])
 
+  // Default model on startup (best-effort): the Ratome mascot, 180 mm demo
+  // asset. Never overrides a file the user imported first.
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const r = await fetch(import.meta.env.BASE_URL + 'ratome.stl')
+        if (!r.ok) return
+        const blob = await r.blob()
+        if (useStore.getState().pieces.length) return
+        const geometry = await importModelFile(
+          new File([blob], 'Ratome Mascotte.stl', { type: 'model/stl' })
+        )
+        if (useStore.getState().pieces.length) {
+          geometry.dispose()
+          return
+        }
+        useStore.getState().setModel('Ratome Mascotte.stl', geometry)
+        geometry.computeBoundingBox()
+        const c = geometry.boundingBox.getCenter(new THREE.Vector3())
+        useStore.getState().setPlane({ axis: 'z', offset: c.z, tiltA: 0, tiltB: 0 })
+      } catch {
+        /* the app works fine without the default model */
+      }
+    })()
+  }, [])
+
 
   const lastModelRef = useRef(null)
   useEffect(() => {

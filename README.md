@@ -8,7 +8,8 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
 
 ## Features (v0.1)
 
-- **Import** STL / OBJ / GLB / GLTF / 3MF (drag & drop or file picker)
+- **Import** STL / OBJ / GLB / GLTF / 3MF (drag & drop or file picker) — a
+  demo mascot loads at startup so you can try every tool immediately
 - **Model setup** — model always lands centred and resting on the plate
   (auto-grounded after every rotation/resize), right-click menu to re-centre
   or refit the view, per-axis rotation (±15° / ±90°), in-view rotation wheel,

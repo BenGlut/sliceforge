@@ -89,6 +89,13 @@ Key invariants:
 - Store `history` is a stack of previous `pieces` arrays; model transforms
   reset it (transformed pieces no longer match saved ones).
 
+## Default model
+
+`public/ratome.stl` — the owner's Ratome SuperHero mascot, decimated to 80 k
+tris and scaled to 180 mm (3.8 MB), auto-loaded at startup (best-effort fetch
+in App.jsx; never overrides a user import). Regenerate from the full-res
+source in ~/Downloads with the simplifyGeometry pipeline if the mascot evolves.
+
 ## Testing recipes
 
 > Packaged as personal skills: invoke `/sliceforge-verify` (test harness) and
