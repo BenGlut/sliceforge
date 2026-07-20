@@ -18,6 +18,7 @@ async function getWasm() {
 function geometryToManifold(wasm, geometry) {
   const { Manifold, Mesh } = wasm
   const pos = geometry.attributes.position
+  const col = geometry.attributes.color
   let triVerts
   if (geometry.index) {
     triVerts = new Uint32Array(geometry.index.array)
@@ -28,11 +29,25 @@ function geometryToManifold(wasm, geometry) {
     triVerts = new Uint32Array(pos.count)
     for (let i = 0; i < pos.count; i++) triVerts[i] = i
   }
-  const mesh = new Mesh({
-    numProp: 3,
-    vertProperties: new Float32Array(pos.array),
-    triVerts
-  })
+  // Vertex colors ride along as 3 extra properties — Manifold interpolates
+  // them across every boolean, so colors survive cuts.
+  let vertProperties
+  let numProp = 3
+  if (col) {
+    numProp = 6
+    vertProperties = new Float32Array(pos.count * 6)
+    for (let i = 0; i < pos.count; i++) {
+      vertProperties[i * 6] = pos.array[i * 3]
+      vertProperties[i * 6 + 1] = pos.array[i * 3 + 1]
+      vertProperties[i * 6 + 2] = pos.array[i * 3 + 2]
+      vertProperties[i * 6 + 3] = col.array[i * 3]
+      vertProperties[i * 6 + 4] = col.array[i * 3 + 1]
+      vertProperties[i * 6 + 5] = col.array[i * 3 + 2]
+    }
+  } else {
+    vertProperties = new Float32Array(pos.array)
+  }
+  const mesh = new Mesh({ numProp, vertProperties, triVerts })
   mesh.merge()
   return new Manifold(mesh)
 }
@@ -40,9 +55,57 @@ function geometryToManifold(wasm, geometry) {
 function manifoldToGeometry(manifold) {
   const mesh = manifold.getMesh()
   const g = new THREE.BufferGeometry()
-  g.setAttribute('position', new THREE.BufferAttribute(mesh.vertProperties.slice(), 3))
+  if (mesh.numProp > 3) {
+    const n = mesh.vertProperties.length / mesh.numProp
+    const posArr = new Float32Array(n * 3)
+    const colArr = new Float32Array(n * 3)
+    for (let i = 0; i < n; i++) {
+      posArr[i * 3] = mesh.vertProperties[i * mesh.numProp]
+      posArr[i * 3 + 1] = mesh.vertProperties[i * mesh.numProp + 1]
+      posArr[i * 3 + 2] = mesh.vertProperties[i * mesh.numProp + 2]
+      colArr[i * 3] = mesh.vertProperties[i * mesh.numProp + 3]
+      colArr[i * 3 + 1] = mesh.vertProperties[i * mesh.numProp + 4]
+      colArr[i * 3 + 2] = mesh.vertProperties[i * mesh.numProp + 5]
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(posArr, 3))
+    g.setAttribute('color', new THREE.BufferAttribute(colArr, 3))
+  } else {
+    g.setAttribute('position', new THREE.BufferAttribute(mesh.vertProperties.slice(), 3))
+  }
   g.setIndex(new THREE.BufferAttribute(mesh.triVerts.slice(), 1))
   return niceNormals(g)
+}
+
+// Paint cut-face triangles flat grey (non-indexed geometry only: each face
+// owns its vertices, so walls keep their colour). planeTest receives the 3
+// vertices of a triangle and says whether it lies on a cut plane.
+const GREY = [0.62, 0.63, 0.66]
+function paintFaces(g, planeTest) {
+  const col = g.attributes.color
+  if (!col || g.index) return
+  const pos = g.attributes.position
+  const v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]
+  for (let t = 0; t < pos.count; t += 3) {
+    for (let k = 0; k < 3; k++) v[k].fromBufferAttribute(pos, t + k)
+    if (planeTest(v)) {
+      for (let k = 0; k < 3; k++) col.setXYZ(t + k, GREY[0], GREY[1], GREY[2])
+    }
+  }
+  col.needsUpdate = true
+}
+
+// Tool solids (pins, cutting boxes) meeting a colored model in a boolean:
+// give them 3 colour properties (setProperties counts EXTRA props, position
+// excluded) so the faces they create read as neutral grey, not black.
+function matchProps(tool, hasColor) {
+  if (!hasColor) return tool
+  const upgraded = tool.setProperties(3, (newProp) => {
+    newProp[0] = 0.62
+    newProp[1] = 0.63
+    newProp[2] = 0.66
+  })
+  tool.delete()
+  return upgraded
 }
 
 function polygonArea(poly) {
@@ -157,14 +220,45 @@ export async function planeCut(geometry, plane, params) {
   const toWorld = toLocal.clone().invert()
 
   const gLocal = geometry.clone().applyMatrix4(toLocal)
+  const hasColor = !!geometry.attributes.color
+  gLocal.computeBoundingBox()
+  const lb = gLocal.boundingBox.clone()
   const solid = geometryToManifold(wasm, gLocal)
   gLocal.dispose()
 
   const kerf = Math.max(0, params.kerf || 0)
   const cleanup = []
   try {
-    let top = solid.trimByPlane([0, 0, 1], kerf / 2)
-    let bottom = solid.trimByPlane([0, 0, -1], kerf / 2)
+    let top, bottom
+    if (hasColor) {
+      // trimByPlane zero-fills colour properties on the cap (black faces);
+      // intersect with grey half-space boxes instead so cuts read neutral.
+      const m = 1
+      const sx = lb.max.x - lb.min.x + 2 * m
+      const sy = lb.max.y - lb.min.y + 2 * m
+      const boxTop = matchProps(
+        Manifold.cube([sx, sy, lb.max.z + m - kerf / 2], false).translate([
+          lb.min.x - m,
+          lb.min.y - m,
+          kerf / 2
+        ]),
+        true
+      )
+      const boxBot = matchProps(
+        Manifold.cube([sx, sy, -kerf / 2 - (lb.min.z - m)], false).translate([
+          lb.min.x - m,
+          lb.min.y - m,
+          lb.min.z - m
+        ]),
+        true
+      )
+      cleanup.push(boxTop, boxBot)
+      top = solid.intersect(boxTop)
+      bottom = solid.intersect(boxBot)
+    } else {
+      top = solid.trimByPlane([0, 0, 1], kerf / 2)
+      bottom = solid.trimByPlane([0, 0, -1], kerf / 2)
+    }
     cleanup.push(top, bottom)
 
     if (top.isEmpty() || bottom.isEmpty()) {
@@ -187,11 +281,10 @@ export async function planeCut(geometry, plane, params) {
       const rTip = params.taper && type !== 'dowel' ? r * 0.8 : r
       for (const [x, y] of pinSpots(section.toPolygons(), r, tol)) {
         if (type === 'dowel') {
-          const hole = Manifold.cylinder(h + 2 * tol, r + tol, r + tol, seg, true).translate([
-            x,
-            y,
-            0
-          ])
+          const hole = matchProps(
+            Manifold.cylinder(h + 2 * tol, r + tol, r + tol, seg, true).translate([x, y, 0]),
+            hasColor
+          )
           cleanup.push(hole)
           const t2 = top.subtract(hole)
           const b2 = bottom.subtract(hole)
@@ -200,12 +293,14 @@ export async function planeCut(geometry, plane, params) {
           bottom = b2
           continue
         }
-        const peg = Manifold.cylinder(h, r, rTip, seg, true).translate([x, y, 0])
-        const socket = Manifold.cylinder(h + 2 * tol, r + tol, rTip + tol, seg, true).translate([
-          x,
-          y,
-          0
-        ])
+        const peg = matchProps(
+          Manifold.cylinder(h, r, rTip, seg, true).translate([x, y, 0]),
+          hasColor
+        )
+        const socket = matchProps(
+          Manifold.cylinder(h + 2 * tol, r + tol, rTip + tol, seg, true).translate([x, y, 0]),
+          hasColor
+        )
         cleanup.push(peg, socket)
         const b2 = bottom.add(peg)
         const t2 = top.subtract(socket)
@@ -215,8 +310,15 @@ export async function planeCut(geometry, plane, params) {
       }
     }
 
-    const gTop = manifoldToGeometry(top).applyMatrix4(toWorld)
-    const gBottom = manifoldToGeometry(bottom).applyMatrix4(toWorld)
+    const gTop = manifoldToGeometry(top)
+    const gBottom = manifoldToGeometry(bottom)
+    if (hasColor) {
+      // In the local frame the cut caps sit exactly at z = ±kerf/2.
+      paintFaces(gTop, (v) => v.every((p) => Math.abs(p.z - kerf / 2) < 0.02))
+      paintFaces(gBottom, (v) => v.every((p) => Math.abs(p.z + kerf / 2) < 0.02))
+    }
+    gTop.applyMatrix4(toWorld)
+    gBottom.applyMatrix4(toWorld)
     return [gTop, gBottom]
   } finally {
     solid.delete()
@@ -242,13 +344,23 @@ export async function volumeCut(geometry, matrixArray) {
   const m = new THREE.Matrix4().fromArray(matrixArray)
   const inv = m.clone().invert()
   const gLocal = geometry.clone().applyMatrix4(inv)
+  const hasColor = !!geometry.attributes.color
   const solid = geometryToManifold(wasm, gLocal)
   gLocal.dispose()
-  const cube = Manifold.cube([1, 1, 1], true)
+  const cube = matchProps(Manifold.cube([1, 1, 1], true), hasColor)
   const out = []
   for (const part of [solid.subtract(cube), solid.intersect(cube)]) {
     if (!part.isEmpty()) {
-      out.push(manifoldToGeometry(part).applyMatrix4(m))
+      const g = manifoldToGeometry(part)
+      if (hasColor) {
+        // Box faces sit on the unit cube's planes in the local frame.
+        paintFaces(g, (v) =>
+          ['x', 'y', 'z'].some((a) =>
+            v.every((p) => Math.abs(Math.abs(p[a]) - 0.5) < 0.005)
+          )
+        )
+      }
+      out.push(g.applyMatrix4(m))
     }
     part.delete()
   }
@@ -271,12 +383,33 @@ export async function simplifyGeometry(geometry, ratio) {
 
   await MeshoptSimplifier.ready
   const index = new Uint32Array(weldedMesh.triVerts)
-  const positions = new Float32Array(weldedMesh.vertProperties)
+  // De-interleave: the welded mesh may carry colors (numProp 6); meshopt
+  // wants bare stride-3 positions and returns indices into the same vertex
+  // order, so extra attributes survive untouched.
+  const np = weldedMesh.numProp
+  const n = weldedMesh.vertProperties.length / np
+  let positions
+  let colors = null
+  if (np > 3) {
+    positions = new Float32Array(n * 3)
+    colors = new Float32Array(n * 3)
+    for (let i = 0; i < n; i++) {
+      positions[i * 3] = weldedMesh.vertProperties[i * np]
+      positions[i * 3 + 1] = weldedMesh.vertProperties[i * np + 1]
+      positions[i * 3 + 2] = weldedMesh.vertProperties[i * np + 2]
+      colors[i * 3] = weldedMesh.vertProperties[i * np + 3]
+      colors[i * 3 + 1] = weldedMesh.vertProperties[i * np + 4]
+      colors[i * 3 + 2] = weldedMesh.vertProperties[i * np + 5]
+    }
+  } else {
+    positions = new Float32Array(weldedMesh.vertProperties)
+  }
   const target = Math.max(4, Math.floor((index.length * ratio) / 3)) * 3
   const [newIndex] = MeshoptSimplifier.simplify(index, positions, 3, target, 0.05, [])
 
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  if (colors) g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
   g.setIndex(new THREE.BufferAttribute(newIndex, 1))
   return niceNormals(g)
 }

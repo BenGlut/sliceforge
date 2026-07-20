@@ -12,7 +12,23 @@ function collectGeometries(root) {
   root.traverse((node) => {
     if (node.isMesh && node.geometry) {
       const g = node.geometry.clone().applyMatrix4(node.matrixWorld)
-      geoms.push(g.index ? g.toNonIndexed() : g)
+      const flat = g.index ? g.toNonIndexed() : g
+      // No vertex colors? Bake the mesh material's color so multi-material
+      // files (GLB/3MF/OBJ+MTL) keep their color zones per vertex.
+      if (!flat.attributes.color) {
+        const c = Array.isArray(node.material) ? node.material[0]?.color : node.material?.color
+        if (c) {
+          const n = flat.attributes.position.count
+          const arr = new Float32Array(n * 3)
+          for (let i = 0; i < n; i++) {
+            arr[i * 3] = c.r
+            arr[i * 3 + 1] = c.g
+            arr[i * 3 + 2] = c.b
+          }
+          flat.setAttribute('color', new THREE.BufferAttribute(arr, 3))
+        }
+      }
+      geoms.push(flat)
     }
   })
   return geoms
@@ -25,16 +41,32 @@ function toSingleGeometry(rootOrGeometry) {
   } else {
     const geoms = collectGeometries(rootOrGeometry)
     if (!geoms.length) throw new Error('no mesh found in file')
-    // Keep positions only: pieces are re-derived solids, materials don't survive cuts.
+    const anyColor = geoms.some((geom) => geom.attributes.color)
     for (const geom of geoms) {
       for (const name of Object.keys(geom.attributes)) {
-        if (name !== 'position') geom.deleteAttribute(name)
+        if (name !== 'position' && name !== 'color') geom.deleteAttribute(name)
+      }
+      if (anyColor && !geom.attributes.color) {
+        const n = geom.attributes.position.count
+        geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3))
       }
     }
     g = geoms.length === 1 ? geoms[0] : mergeGeometries(geoms, false)
   }
   for (const name of Object.keys(g.attributes)) {
-    if (name !== 'position') g.deleteAttribute(name)
+    if (name !== 'position' && name !== 'color') g.deleteAttribute(name)
+  }
+  // An all-white color attribute carries no information — drop it.
+  if (g.attributes.color) {
+    const a = g.attributes.color.array
+    let informative = false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] < 0.999) {
+        informative = true
+        break
+      }
+    }
+    if (!informative) g.deleteAttribute('color')
   }
   return niceNormals(g)
 }

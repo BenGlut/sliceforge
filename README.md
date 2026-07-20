@@ -28,6 +28,8 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
   cross-section (several per region, spread to lock rotation), printable
   tolerance; pin diameter/length configurable; tapered option (tip 80%)
   for easy assembly
+- **Color aware** — vertex colors and material colors survive import,
+  cutting and simplification; cut faces render a clean neutral grey
 - **Mesh simplification** — decimate heavy scans to a chosen percentage
   (meshoptimizer), model stays cuttable
 - **Watertight output** — all booleans run through [Manifold](https://github.com/elalish/manifold)
@@ -39,7 +41,7 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
 
 ## Roadmap
 
-- [ ] Color cut — split by vertex-color / texture zones (multi-material printing)
+- [ ] Color cut — select a color zone by clicking it, cut per zone
 - [ ] Dovetail connectors, manual pin placement
 - [ ] Mesh repair for non-manifold inputs
 - [ ] Orthographic view, measurement tools

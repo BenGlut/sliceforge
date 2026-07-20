@@ -1,9 +1,10 @@
 import * as THREE from 'three'
 import { planeCut, simplifyGeometry, volumeCut } from './manifoldOps.js'
 
-function toGeometry({ positions, index }) {
+function toGeometry({ positions, colors, index }) {
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  if (colors) g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
   if (index) g.setIndex(new THREE.BufferAttribute(index, 1))
   return g
 }
@@ -11,6 +12,7 @@ function toGeometry({ positions, index }) {
 function toPayload(geometry) {
   return {
     positions: geometry.attributes.position.array,
+    colors: geometry.attributes.color?.array ?? null,
     normals: geometry.attributes.normal?.array ?? null,
     index: geometry.index?.array ?? null
   }
@@ -27,7 +29,7 @@ self.onmessage = async (e) => {
     else throw new Error(`unknown op ${op}`)
     const payload = results.map(toPayload)
     const transfer = payload.flatMap((p) =>
-      [p.positions.buffer, p.normals?.buffer, p.index?.buffer].filter(Boolean)
+      [...new Set([p.positions.buffer, p.colors?.buffer, p.normals?.buffer, p.index?.buffer])].filter(Boolean)
     )
     self.postMessage({ id, ok: true, results: payload }, transfer)
   } catch (err) {

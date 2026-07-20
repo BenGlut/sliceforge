@@ -158,7 +158,14 @@ mentions anywhere in the repo.
     slider, predictable on organic sculpts — combined with crease stops;
     sliders re-run the selection live from the last seed; orange overlay;
     detach = boundary-plane-fitted oriented box via volumeCut)
-8. Color cut (vertex colors / texture zones) — needs color-preserving import
+8. Color cut — PHASE 1 DONE: color-preserving import (OBJ vertex colors,
+    GLB/3MF/MTL material colors baked per vertex, all-white dropped), colored
+    display (vertexColors material), colors ride through every boolean as
+    Manifold properties (numProp 6), cut faces painted flat neutral grey
+    (paintFaces on the non-indexed result, local-frame plane tests), tools
+    upgraded via matchProps (setProperties counts EXTRA props). Simplify
+    de-interleaves and keeps colors. REMAINING phase 2: click-a-color zone
+    selection and per-zone cutting.
 9. Tapered pins ~~done~~ (tip 80% of base, default ON); dovetail + manual pin placement remain
 10. Mesh repair for non-manifold inputs
 11. Perf: lazy transform bake (keep rotations on the group until a cut/export

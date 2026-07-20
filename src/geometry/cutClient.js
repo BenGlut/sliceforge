@@ -29,16 +29,18 @@ async function runOp(op, geometry, extra) {
   const id = ++seq
   // Copies: the displayed geometry must keep its buffers.
   const positions = new Float32Array(geometry.attributes.position.array)
+  const colors = geometry.attributes.color ? new Float32Array(geometry.attributes.color.array) : null
   const index = geometry.index ? new Uint32Array(geometry.index.array) : null
   const promise = new Promise((resolve, reject) => pending.set(id, { resolve, reject }))
   getWorker().postMessage(
-    { id, op, positions, index, ...extra },
-    index ? [positions.buffer, index.buffer] : [positions.buffer]
+    { id, op, positions, colors, index, ...extra },
+    [positions.buffer, colors?.buffer, index?.buffer].filter(Boolean)
   )
   const results = await promise
   return results.map((r) => {
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.BufferAttribute(r.positions, 3))
+    if (r.colors) g.setAttribute('color', new THREE.BufferAttribute(r.colors, 3))
     if (r.normals) g.setAttribute('normal', new THREE.BufferAttribute(r.normals, 3))
     if (r.index) g.setIndex(new THREE.BufferAttribute(r.index, 1))
     if (!r.normals) g.computeVertexNormals()

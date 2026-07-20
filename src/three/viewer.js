@@ -157,7 +157,15 @@ export class Viewer {
       } else if (mesh.geometry !== p.geometry) {
         mesh.geometry = p.geometry
       }
-      mesh.material.color.setHex(PIECE_COLORS[i % PIECE_COLORS.length])
+      // Colored models render their own vertex colors; plain ones get the
+      // per-piece palette.
+      const hasColor = !!p.geometry.attributes.color
+      if (mesh.material.vertexColors !== hasColor) {
+        mesh.material.vertexColors = hasColor
+        mesh.material.needsUpdate = true
+      }
+      if (hasColor) mesh.material.color.setHex(0xffffff)
+      else mesh.material.color.setHex(PIECE_COLORS[i % PIECE_COLORS.length])
       mesh.material.emissive.setHex(p.id === this.selectedPieceId ? 0x24407a : 0x000000)
       mesh.visible = p.visible
       this.piecesGroup.add(mesh)
