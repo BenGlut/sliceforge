@@ -175,8 +175,9 @@ interieur/exterieur.
     holes — same holes both sides, bridged by a wooden/printed dowel.
     Auto-placement count is driven by cutParams.spacing (min distance between
     connectors, floor 4x pin footprint, cap 12/face) — LuBan-style control.
-    After every cut the view auto-explodes to 0.25 if it was 0 (revealCut in
-    App) so the separation is visible immediately.
+    The exploded view is in REAL mm (uniform expansion scaled by the median
+    nearest-neighbour centroid distance — approximate on irregular grids);
+    after every cut revealCut() auto-sets ~8% of the model size (6-60 mm).
     Connector presets via setConnectorType/CONNECTOR_PRESETS (store.js):
     dowel = standard wood 8 x 35 mm + 0.2 mm hole clearance + 45 mm spacing; values stay
     editable, tolerance field exposed in both Tenons and Puzzle sections)

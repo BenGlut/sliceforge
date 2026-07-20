@@ -210,13 +210,29 @@ export class Viewer {
     this.controls.target.copy(center)
   }
 
-  setExplode(factor) {
-    const c = new THREE.Vector3()
-    for (const mesh of this.piecesGroup.children) {
-      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
-      mesh.geometry.boundingBox.getCenter(c).sub(this.modelCenter)
-      mesh.position.copy(c.multiplyScalar(factor))
+  // Exploded view in REAL millimetres: the gap added between neighbouring
+  // pieces equals gapMm. Uniform expansion scaled by the median
+  // nearest-neighbour centroid distance — even spacing on a puzzle grid as
+  // well as on a simple two-half cut.
+  setExplode(gapMm) {
+    const meshes = this.piecesGroup.children
+    if (!meshes.length) return
+    const centers = meshes.map((m) => {
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox()
+      return m.geometry.boundingBox.getCenter(new THREE.Vector3())
+    })
+    let B = 1
+    if (centers.length > 1) {
+      const nn = centers.map((c, i) =>
+        Math.min(...centers.map((o, j) => (i === j ? Infinity : c.distanceTo(o))))
+      )
+      nn.sort((a, b) => a - b)
+      B = Math.max(1, nn[Math.floor(nn.length / 2)])
     }
+    const k = (gapMm || 0) / B
+    meshes.forEach((m, i) => {
+      m.position.copy(centers[i]).sub(this.modelCenter).multiplyScalar(k)
+    })
   }
 
 

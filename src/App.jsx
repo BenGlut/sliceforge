@@ -396,10 +396,18 @@ export default function App() {
     }
   }
 
-  // Make the cut visible: gently explode the pieces so the user SEES the
-  // separation and discovers the exploded-view slider.
+  // Make the cut visible: gently explode the pieces (real mm, scaled to the
+  // model) so the user SEES the separation and discovers the slider.
   function revealCut() {
-    if (useStore.getState().explode === 0) useStore.getState().setExplode(0.25)
+    const st = useStore.getState()
+    if (st.explode !== 0) return
+    const box = new THREE.Box3()
+    st.pieces.forEach((p) => {
+      if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
+      box.union(p.geometry.boundingBox)
+    })
+    const d = box.isEmpty() ? 100 : Math.max(...box.getSize(new THREE.Vector3()).toArray())
+    st.setExplode(Math.round(Math.min(60, Math.max(6, d * 0.08))))
   }
 
   async function onCut() {
@@ -1087,12 +1095,12 @@ export default function App() {
               </ul>
               {s.pieces.length > 1 && (
                 <label>
-                  {t('explode')}
+                  {t('explode')} ({Math.round(s.explode)} mm)
                   <input
                     type="range"
                     min="0"
-                    max="1"
-                    step="0.01"
+                    max={Math.max(30, Math.round(maxDim / 2))}
+                    step="1"
                     value={s.explode}
                     onChange={(e) => s.setExplode(+e.target.value)}
                   />
