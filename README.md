@@ -18,7 +18,8 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
   metre-unit exports
 - **Plane cut** — axis + offset + two tilt angles, optional kerf (blade clearance)
 - **Puzzle blocks** — slice a (life-size) model into printable blocks of a
-  chosen size (e.g. 230 x 230 x 230 mm) with connectors on every interface:
+  chosen size (e.g. 230 x 230 x 230 mm), with a live preview of every cut
+  plane on the model before you commit, and connectors on every interface:
   round, square or hex pegs, or dowel holes for wooden/printed dowels
 - **Shape cut** — click a protruding detail (a hand, an ear): the smooth
   region grows up to the surrounding creases, then detaches as its own piece

@@ -388,6 +388,46 @@ export class Viewer {
     this.planeGizmo?.setMode(mode)
   }
 
+  // Puzzle preview: one translucent quad per upcoming grid cut, bounded to
+  // the model box, updated live as the block size changes.
+  setPuzzlePreview(planes, box) {
+    if (!this._puzzleGroup) {
+      this._puzzleGroup = new THREE.Group()
+      this.scene.add(this._puzzleGroup)
+    }
+    this._puzzleGroup.clear()
+    if (!planes?.length || !box) return
+    const c = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+    const quad = new THREE.PlaneGeometry(1, 1)
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x2f6bff,
+      transparent: true,
+      opacity: 0.1,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    })
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x2f6bff, transparent: true, opacity: 0.6 })
+    const edges = new THREE.EdgesGeometry(quad)
+    for (const { axis, offset } of planes) {
+      const m = new THREE.Mesh(quad, mat)
+      m.add(new THREE.LineSegments(edges, lineMat))
+      if (axis === 'x') {
+        m.rotation.y = Math.PI / 2
+        m.scale.set(size.z * 1.02, size.y * 1.02, 1)
+        m.position.set(offset, c.y, c.z)
+      } else if (axis === 'y') {
+        m.rotation.x = -Math.PI / 2
+        m.scale.set(size.x * 1.02, size.z * 1.02, 1)
+        m.position.set(c.x, offset, c.z)
+      } else {
+        m.scale.set(size.x * 1.02, size.y * 1.02, 1)
+        m.position.set(c.x, c.y, offset)
+      }
+      this._puzzleGroup.add(m)
+    }
+  }
+
   // Connector markers live as children of the plane object, so they follow
   // its drags for free. Positions are plane-local mm; the parent's uniform
   // scale is compensated per marker.

@@ -10,6 +10,23 @@ import { planeCutAsync, simplifyAsync, volumeCutAsync } from './geometry/cutClie
 import { IconCut, IconBox, IconRotate, IconFaceDown, IconGrid, IconWand, IconLogo } from './icons.jsx'
 import { growRegion, regionPositions, regionOrientedBox } from './geometry/shapeSelect.js'
 
+// One source of truth for the puzzle grid: the preview shows EXACTLY the
+// planes the generation will cut.
+function puzzlePlanes(box, blockSize) {
+  const planes = []
+  for (const [axis, size] of [
+    ['x', blockSize.x],
+    ['y', blockSize.y],
+    ['z', blockSize.z]
+  ]) {
+    if (!(size > 1)) continue
+    for (let off = box.min[axis] + size; off < box.max[axis] - 0.01; off += size) {
+      planes.push({ axis, offset: off })
+    }
+  }
+  return planes
+}
+
 const TOOLBAR = [
   ['plane', <IconCut key="i" />, 'planeCut'],
   ['volume', <IconBox key="i" />, 'volumeCut'],
@@ -342,6 +359,23 @@ export default function App() {
     }
   }, [activeTool])
 
+  // Live preview of the puzzle grid while the tool is open.
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer) return
+    if (activeTool !== 'puzzle' || !s.pieces.length) {
+      viewer.setPuzzlePreview(null)
+      return
+    }
+    const box = new THREE.Box3()
+    s.pieces.forEach((p) => {
+      if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
+      box.union(p.geometry.boundingBox)
+    })
+    viewer.setPuzzlePreview(puzzlePlanes(box, blockSize), box)
+    return () => viewer.setPuzzlePreview(null)
+  }, [activeTool, blockSize, s.pieces])
+
   async function onFiles(files) {
     const file = files?.[0]
     if (!file) return
@@ -427,19 +461,11 @@ export default function App() {
         if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
         box.union(p.geometry.boundingBox)
       })
-      const planes = []
-      for (const [axis, size] of [
-        ['x', blockSize.x],
-        ['y', blockSize.y],
-        ['z', blockSize.z]
-      ]) {
-        if (!(size > 1)) continue
-        for (let off = box.min[axis] + size; off < box.max[axis] - 0.01; off += size) {
-          const pos = [0, 0, 0]
-          pos[{ x: 0, y: 1, z: 2 }[axis]] = off
-          planes.push({ axis, offset: off, pos, quat: AXIS_QUATS[axis] })
-        }
-      }
+      const planes = puzzlePlanes(box, blockSize).map(({ axis, offset }) => {
+        const pos = [0, 0, 0]
+        pos[{ x: 0, y: 1, z: 2 }[axis]] = offset
+        return { axis, offset, pos, quat: AXIS_QUATS[axis] }
+      })
       let current = s.pieces.filter((p) => p.visible)
       let done = 0
       for (const plane of planes) {

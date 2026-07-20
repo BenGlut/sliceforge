@@ -167,7 +167,9 @@ interieur/exterieur.
 4. ~~Multiple pins per cut face~~ (grid candidates + ring-fit test + greedy spread, max 5/region)
 5. ~~Mesh decimation~~ (weld via Manifold then MeshoptSimplifier, % in Model section)
 6. ~~Volume cut~~ (oriented box + TransformControls translate/rotate/scale; cut in box-local frame vs unit cube; no pins yet)
-6a. ~~Puzzle blocks~~ (grid slice at a chosen block size, e.g. printer-bed
+6a. ~~Puzzle blocks~~ (LIVE grid preview while the tool is open — translucent
+    bounded quads from the same puzzlePlanes() helper the generation uses,
+    updating as block sizes change; grid slice at a chosen block size, e.g. printer-bed
     230³; sequential plane cuts skipping non-crossing pieces; blocks renamed
     bottom-layer-first; connector shapes: round/square/hex pegs or dowel
     holes — same holes both sides, bridged by a wooden/printed dowel)
