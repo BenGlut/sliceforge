@@ -64,8 +64,11 @@ export class Viewer {
     this.onPieceClick = null
     this.onFacePick = null
     this.onShapePick = null
+    this.onPlanePick = null
+    this.onPlaneChange = null
     this.faceMode = false
     this.shapeMode = false
+    this.planeMode = false
     this.selectedPieceId = null
     this._raycaster = new THREE.Raycaster()
     this._downPos = null
@@ -97,7 +100,8 @@ export class Viewer {
         ),
         this.camera
       )
-      if (this.faceMode || this.shapeMode) {
+      if (this.planeMode && this.planeGizmo?.dragging) return
+      if (this.faceMode || this.shapeMode || this.planeMode) {
         // Precise triangle raycast (meshes carry no rotation, so face data
         // is already in world space).
         const hits = this._raycaster.intersectObjects(
@@ -107,6 +111,8 @@ export class Viewer {
         const hit = hits[0]
         if (!hit?.face) return
         if (this.shapeMode) this.onShapePick?.(hit.faceIndex, hit.object.userData.pieceId)
+        else if (this.planeMode)
+          this.onPlanePick?.(hit.point.clone(), hit.face.normal.clone())
         else this.onFacePick?.(hit.face.normal.clone())
         return
       }
@@ -316,17 +322,65 @@ export class Viewer {
     if (q.angleTo(new THREE.Quaternion()) > 1e-4) this.onRotateEnd?.(q)
   }
 
-  showPlane(normal, origin, size) {
-    this.hidePlane()
-    const plane = new THREE.Plane(normal, -normal.dot(origin))
-    this.planeHelper = new THREE.PlaneHelper(plane, size, 0xffb347)
-    this.scene.add(this.planeHelper)
+  // The cut plane is a grabbable object: translucent quad + outline, driven
+  // by its own TransformControls (translate/rotate, toggled via T/R).
+  showPlane(plane, size) {
+    if (!this.planeObj) {
+      const geo = new THREE.PlaneGeometry(1, 1)
+      this.planeObj = new THREE.Mesh(
+        geo,
+        new THREE.MeshBasicMaterial({
+          color: 0x2f6bff,
+          transparent: true,
+          opacity: 0.14,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        })
+      )
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geo),
+        new THREE.LineBasicMaterial({ color: 0x2f6bff })
+      )
+      this.planeObj.add(edges)
+      this.scene.add(this.planeObj)
+      this.planeGizmo = new TransformControls(this.camera, this.renderer.domElement)
+      this.planeGizmo.setSize(0.85)
+      this.planeGizmoHelper = this.planeGizmo.getHelper()
+      this.scene.add(this.planeGizmoHelper)
+      this.planeGizmo.addEventListener('dragging-changed', (e) => {
+        this.controls.enabled = !e.value
+        if (!e.value) this._commitPlane()
+      })
+      this.planeGizmo.addEventListener('objectChange', () => this._commitPlane())
+    }
+    // Don't fight the user's drag with store round-trips.
+    if (!this.planeGizmo.dragging) {
+      this.planeObj.position.fromArray(plane.pos)
+      this.planeObj.quaternion.fromArray(plane.quat)
+    }
+    this.planeObj.scale.setScalar(Math.max(10, size))
+    this.planeObj.visible = true
+    this.planeGizmo.attach(this.planeObj)
+    this.planeGizmoHelper.visible = true
+  }
+
+  _commitPlane() {
+    if (!this.planeObj) return
+    this.onPlaneChange?.({
+      pos: this.planeObj.position.toArray(),
+      quat: this.planeObj.quaternion.toArray()
+    })
+  }
+
+  setPlaneGizmoMode(mode) {
+    this.planeGizmo?.setMode(mode)
   }
 
   hidePlane() {
-    if (this.planeHelper) {
-      this.scene.remove(this.planeHelper)
-      this.planeHelper = null
+    if (this.planeObj) {
+      this.planeObj.visible = false
+      this.planeGizmo.detach()
+      this.planeGizmoHelper.visible = false
     }
   }
 

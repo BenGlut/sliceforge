@@ -1,19 +1,22 @@
 import * as THREE from 'three'
 
 /**
- * Compute the cut plane's normal + origin from UI params.
- * plane: { axis: 'x'|'y'|'z', offset, tiltA, tiltB } — tilts in degrees.
- * Kept free of any manifold import so the main bundle can show the plane
- * helper without loading the WASM engine.
+ * The cut plane is a posed object: { pos: [x,y,z], quat: [x,y,z,w] } — its
+ * local +Z is the cut normal. Draggable in the viewport, serializable to the
+ * worker. Kept free of any manifold import.
  */
 export function planeBasis(plane) {
-  const base = { x: [0, 90, 0], y: [-90, 0, 0], z: [0, 0, 0] }[plane.axis]
-  const e = new THREE.Euler(
-    THREE.MathUtils.degToRad(base[0] + plane.tiltA),
-    THREE.MathUtils.degToRad(base[1] + plane.tiltB),
-    0
-  )
-  const normal = new THREE.Vector3(0, 0, 1).applyEuler(e).normalize()
-  const origin = normal.clone().multiplyScalar(plane.offset)
+  const q = new THREE.Quaternion(...plane.quat)
+  const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(q).normalize()
+  const origin = new THREE.Vector3(...plane.pos)
   return { normal, origin }
 }
+
+// Presets: quaternions turning +Z into each world axis.
+export const AXIS_QUATS = {
+  x: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0)).toArray(),
+  y: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0)).toArray(),
+  z: [0, 0, 0, 1]
+}
+
+export const DEFAULT_PLANE = { pos: [0, 0, 0], quat: AXIS_QUATS.y }

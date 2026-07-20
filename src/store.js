@@ -52,7 +52,8 @@ export const useStore = create((set) => ({
   explode: 0,
   setExplode: (explode) => set({ explode }),
 
-  plane: { axis: 'z', offset: 0, tiltA: 0, tiltB: 0 },
+  // Cut plane as a posed object: pos + quat (local +Z = cut normal).
+  plane: { pos: [0, 0, 0], quat: [-Math.SQRT1_2, 0, 0, Math.SQRT1_2] },
   setPlane: (patch) => set((s) => ({ plane: { ...s.plane, ...patch } })),
 
   cutParams: {

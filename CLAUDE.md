@@ -91,8 +91,11 @@ Key invariants:
 - Display normals come from `niceNormals` (normals.js): toCreasedNormals at
   30° under 500k tris (flat cut faces stay flat next to smooth surfaces),
   smooth fallback above. NEVER plain computeVertexNormals on cut results.
-- Cuts happen in the plane's local frame (plane -> z=0), results transformed
-  back. Pins: peg unioned on the bottom piece, socket (peg + tolerance)
+- The cut plane is a POSED OBJECT { pos, quat } (local +Z = normal), shown
+  as a draggable translucent quad with its own TransformControls (T/R modes);
+  clicking the model in plane mode snaps the plane to the surface (onPlanePick).
+  Axis presets set quat + recenter. Cuts happen in the plane's local frame
+  (plane -> z=0), results transformed back. Pins: peg unioned on the bottom piece, socket (peg + tolerance)
   subtracted from the top piece, placed on the z=0 cross-section.
 - Store `history` is a stack of previous `pieces` arrays; model transforms
   reset it (transformed pieces no longer match saved ones).
@@ -139,6 +142,16 @@ Commit message: imperative summary, mechanism included when non-obvious. Push
 to main → Actions builds → Pages serves. Watch `gh run list` until
 `completed/success` before claiming it's live. No Co-Authored-By lines, no AI
 mentions anywhere in the repo.
+
+## objslice parity gaps (from hands-on benchmark of app.objslice.com, 2026-07-20)
+
+Still missing vs their app: bounded cut plane (rect/circle shape, size,
+solid depth => partial cuts); MANUAL connector placement on the cut surface
+(part turns transparent, click to drop connectors); per-piece Move/Scale
+tools; per-piece lock/duplicate + volume/faces stats; redo (⌘⇧Z) and ⌘Z
+shortcut; 4-step onboarding wizard; zone cut auto-place-on-click had a
+flat-plane variant (partial 'crossed zones'). Their default naming:
+interieur/exterieur.
 
 ## Roadmap (owner-approved order)
 

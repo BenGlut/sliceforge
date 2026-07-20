@@ -5,7 +5,7 @@ import { makeT } from './i18n.js'
 import { Viewer, PIECE_COLORS } from './three/viewer.js'
 import { importModelFile, ACCEPTED } from './io/importers.js'
 import { exportSTL, exportOBJ, exportGLB, export3MF } from './io/exporters.js'
-import { planeBasis } from './geometry/plane.js'
+import { AXIS_QUATS } from './geometry/plane.js'
 import { planeCutAsync, simplifyAsync, volumeCutAsync } from './geometry/cutClient.js'
 import { IconCut, IconBox, IconRotate, IconFaceDown, IconGrid, IconWand, IconLogo } from './icons.jsx'
 import { growRegion, regionPositions, regionOrientedBox } from './geometry/shapeSelect.js'
@@ -31,6 +31,7 @@ export default function App() {
   // default. Esc leaves the tool.
   const [activeTool, setActiveTool] = useState(null) // null | 'plane' | 'rotate' | 'volume'
   const [volumeMode, setVolumeMode] = useState('translate')
+  const [planeMode, setPlaneMode] = useState('translate')
   const [selectedId, setSelectedId] = useState(null)
   const [blockSize, setBlockSizeState] = useState({ x: 220, y: 220, z: 250 })
   const [busyMsg, setBusyMsg] = useState(null)
@@ -97,6 +98,16 @@ export default function App() {
       useStore.getState().rotateModelQuaternion(q)
     }
     viewer.onContextMenu = (x, y) => setCtxMenu({ x, y })
+    // Draggable cut plane: gizmo drags write back to the store; clicking the
+    // model in plane mode snaps the plane there, oriented to the surface.
+    viewer.onPlaneChange = ({ pos, quat }) => useStore.getState().setPlane({ pos, quat })
+    viewer.onPlanePick = (point, normal) => {
+      const quat = new THREE.Quaternion().setFromUnitVectors(
+        new THREE.Vector3(0, 0, 1),
+        normal.normalize()
+      )
+      useStore.getState().setPlane({ pos: point.toArray(), quat: quat.toArray() })
+    }
     // Shape cut: grow a smooth region from the clicked triangle, bounded by
     // geodesic radius and creases, highlighted live (see runShapeSelection).
     viewer.onShapePick = (faceIndex, pieceId) => {
@@ -125,7 +136,7 @@ export default function App() {
         useStore.getState().setModel('Ratome Mascotte.stl', geometry)
         geometry.computeBoundingBox()
         const c = geometry.boundingBox.getCenter(new THREE.Vector3())
-        useStore.getState().setPlane({ axis: 'z', offset: c.z, tiltA: 0, tiltB: 0 })
+        useStore.getState().setPlane({ pos: [c.x, c.y, c.z] })
       } catch {
         /* the app works fine without the default model */
       }
@@ -214,6 +225,25 @@ export default function App() {
     viewerRef.current?.setVolumeMode(volumeMode)
   }, [volumeMode])
 
+  useEffect(() => {
+    viewerRef.current?.setPlaneGizmoMode(planeMode)
+  }, [planeMode])
+
+  // T/R toggle the active gizmo mode (plane or volume tool).
+  useEffect(() => {
+    if (activeTool !== 'plane' && activeTool !== 'volume') return
+    const onKey = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      const k = e.key.toLowerCase()
+      if (k !== 't' && k !== 'r') return
+      const mode = k === 't' ? 'translate' : 'rotate'
+      if (activeTool === 'plane') setPlaneMode(mode)
+      else setVolumeMode(mode)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [activeTool])
+
   async function onVolumeCut() {
     s.setBusy(true)
     s.setError(null)
@@ -252,15 +282,18 @@ export default function App() {
       viewer.hidePlane()
       return
     }
-    const { normal, origin } = planeBasis(s.plane)
     const box = new THREE.Box3()
     s.pieces.forEach((p) => {
       if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
       box.union(p.geometry.boundingBox)
     })
     const size = box.isEmpty() ? 100 : box.getSize(new THREE.Vector3()).length()
-    viewer.showPlane(normal, origin, size)
+    viewer.showPlane(s.plane, size * 0.8)
   }, [s.plane, s.pieces, activeTool])
+
+  useEffect(() => {
+    if (viewerRef.current) viewerRef.current.planeMode = activeTool === 'plane'
+  }, [activeTool])
 
   async function onFiles(files) {
     const file = files?.[0]
@@ -272,7 +305,7 @@ export default function App() {
       s.setModel(file.name, geometry)
       geometry.computeBoundingBox()
       const c = geometry.boundingBox.getCenter(new THREE.Vector3())
-      s.setPlane({ axis: 'z', offset: c.z, tiltA: 0, tiltB: 0 })
+      s.setPlane({ pos: [c.x, c.y, c.z] })
     } catch (e) {
       console.error(e)
       s.setError(t('loadError', { name: file.name }))
@@ -350,7 +383,9 @@ export default function App() {
       ]) {
         if (!(size > 1)) continue
         for (let off = box.min[axis] + size; off < box.max[axis] - 0.01; off += size) {
-          planes.push({ axis, offset: off, tiltA: 0, tiltB: 0 })
+          const pos = [0, 0, 0]
+          pos[{ x: 0, y: 1, z: 2 }[axis]] = off
+          planes.push({ axis, offset: off, pos, quat: AXIS_QUATS[axis] })
         }
       }
       let current = s.pieces.filter((p) => p.visible)
@@ -410,11 +445,6 @@ export default function App() {
     if (box.isEmpty()) return { modelBox: null, dims: null }
     return { modelBox: box, dims: box.getSize(new THREE.Vector3()) }
   })()
-  // Plane slider spans the model's extent along the chosen axis only —
-  // no dead travel outside the model.
-  const planeRange = modelBox
-    ? [modelBox.min[s.plane.axis], modelBox.max[s.plane.axis]]
-    : [-100, 100]
   const isTiny = dims && Math.max(dims.x, dims.y, dims.z) < 10
   const maxDim = dims ? Math.max(dims.x, dims.y, dims.z) : 100
   const effRadius = shapeRadius ?? Math.round(maxDim / 4)
@@ -617,55 +647,38 @@ export default function App() {
             <>
             <section>
               <h3>{t('planeCut')}</h3>
+              <div className="dims">{t('planeHint')}</div>
+              <div className="axis-row">
+                {[
+                  ['translate', `${t('modeMove')} (T)`],
+                  ['rotate', `${t('modeRotate')} (R)`]
+                ].map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    className={planeMode === mode ? 'active' : ''}
+                    onClick={() => setPlaneMode(mode)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <label>
                 {t('axis')}
                 <div className="axis-row">
                   {['x', 'y', 'z'].map((a) => (
                     <button
                       key={a}
-                      className={s.plane.axis === a ? 'active' : ''}
-                      onClick={() =>
-                        s.setPlane({
-                          axis: a,
-                          offset: modelBox ? (modelBox.min[a] + modelBox.max[a]) / 2 : 0
-                        })
-                      }
+                      onClick={() => {
+                        const c = modelBox
+                          ? modelBox.getCenter(new THREE.Vector3()).toArray()
+                          : [0, 0, 0]
+                        s.setPlane({ quat: AXIS_QUATS[a], pos: c })
+                      }}
                     >
                       {a.toUpperCase()}
                     </button>
                   ))}
                 </div>
-              </label>
-              <label>
-                {t('offset')} ({s.plane.offset.toFixed(1)})
-                <input
-                  type="range"
-                  min={planeRange[0]}
-                  max={planeRange[1]}
-                  step="0.1"
-                  value={s.plane.offset}
-                  onChange={(e) => s.setPlane({ offset: +e.target.value })}
-                />
-              </label>
-              <label>
-                {t('tiltA')} ({s.plane.tiltA}°)
-                <input
-                  type="range"
-                  min="-45"
-                  max="45"
-                  value={s.plane.tiltA}
-                  onChange={(e) => s.setPlane({ tiltA: +e.target.value })}
-                />
-              </label>
-              <label>
-                {t('tiltB')} ({s.plane.tiltB}°)
-                <input
-                  type="range"
-                  min="-45"
-                  max="45"
-                  value={s.plane.tiltB}
-                  onChange={(e) => s.setPlane({ tiltB: +e.target.value })}
-                />
               </label>
               <label>
                 {t('kerf')}
