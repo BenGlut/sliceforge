@@ -854,7 +854,7 @@ export default function App() {
                         <button
                           key={type}
                           className={s.cutParams.connectorType === type ? 'active' : ''}
-                          onClick={() => s.setCutParams({ connectorType: type })}
+                          onClick={() => s.setConnectorType(type)}
                         >
                           {label}
                         </button>
@@ -970,7 +970,7 @@ export default function App() {
                       <button
                         key={type}
                         className={s.cutParams.connectorType === type ? 'active' : ''}
-                        onClick={() => s.setCutParams({ connectorType: type })}
+                        onClick={() => s.setConnectorType(type)}
                       >
                         {label}
                       </button>
@@ -995,6 +995,16 @@ export default function App() {
                     step="0.5"
                     value={s.cutParams.pinLength}
                     onChange={(e) => s.setCutParams({ pinLength: +e.target.value })}
+                  />
+                </label>
+                <label>
+                  {t('tolerance')}
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.05"
+                    value={s.cutParams.tolerance}
+                    onChange={(e) => s.setCutParams({ tolerance: +e.target.value })}
                   />
                 </label>
                 <button className="primary" disabled={s.busy} onClick={onPuzzle}>

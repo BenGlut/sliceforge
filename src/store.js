@@ -55,6 +55,13 @@ function matrixEntry(total) {
   return { kind: 'matrix', inverse: total.clone().invert().toArray() }
 }
 
+export const CONNECTOR_PRESETS = {
+  pin: { pinDiameter: 6, pinLength: 8, tolerance: 0.15 },
+  square: { pinDiameter: 6, pinLength: 8, tolerance: 0.2 },
+  hex: { pinDiameter: 6, pinLength: 8, tolerance: 0.2 },
+  dowel: { pinDiameter: 8, pinLength: 35, tolerance: 0.2 }
+}
+
 // pieces: [{ id, name, geometry, visible }] — geometry is a THREE.BufferGeometry
 export const useStore = create((set) => ({
   lang: navigator.language.startsWith('fr') ? 'fr' : 'en',
@@ -84,6 +91,18 @@ export const useStore = create((set) => ({
     connectorType: 'pin'
   },
   setCutParams: (patch) => set((s) => ({ cutParams: { ...s.cutParams, ...patch } })),
+
+  // Each connector shape carries a real-world preset — picking "dowel" means
+  // standard 8 x 35 mm wooden dowels with a 0.2 mm hole clearance. Values
+  // stay editable after the switch.
+  setConnectorType: (type) =>
+    set((s) => ({
+      cutParams: {
+        ...s.cutParams,
+        connectorType: type,
+        ...(CONNECTOR_PRESETS[type] ?? {})
+      }
+    })),
 
   setModel: (name, geometry) => {
     const pieces = [{ id: 1, name, geometry, visible: true }]

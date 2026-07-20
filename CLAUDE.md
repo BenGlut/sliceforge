@@ -172,7 +172,10 @@ interieur/exterieur.
     updating as block sizes change; grid slice at a chosen block size, e.g. printer-bed
     230³; sequential plane cuts skipping non-crossing pieces; blocks renamed
     bottom-layer-first; connector shapes: round/square/hex pegs or dowel
-    holes — same holes both sides, bridged by a wooden/printed dowel)
+    holes — same holes both sides, bridged by a wooden/printed dowel.
+    Connector presets via setConnectorType/CONNECTOR_PRESETS (store.js):
+    dowel = standard wood 8 x 35 mm + 0.2 mm hole clearance; values stay
+    editable, tolerance field exposed in both Tenons and Puzzle sections)
 6b. ~~Place-on-face~~ (OrcaSlicer-style: face tool -> click a face -> model
     rotated so that face lies on the grid; grid re-grounds under it)
 7. ~~Shape cut v2~~ (geodesic-radius grow from the clicked triangle — mm
