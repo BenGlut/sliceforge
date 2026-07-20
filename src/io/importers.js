@@ -4,6 +4,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { niceNormals } from '../geometry/normals.js'
 
 function collectGeometries(root) {
   const geoms = []
@@ -35,8 +36,7 @@ function toSingleGeometry(rootOrGeometry) {
   for (const name of Object.keys(g.attributes)) {
     if (name !== 'position') g.deleteAttribute(name)
   }
-  g.computeVertexNormals()
-  return g
+  return niceNormals(g)
 }
 
 // 3D-printing formats are Z-up; the three.js scene is Y-up. Convert on

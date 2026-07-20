@@ -36,15 +36,33 @@ export default function App() {
   const [busyMsg, setBusyMsg] = useState(null)
   const [ctxMenu, setCtxMenu] = useState(null)
   const [shapeMeta, setShapeMeta] = useState(null) // { pieceId, count }
-  const [shapeSens, setShapeSens] = useState(35)
-  const shapeSelRef = useRef(null) // { pieceId, sel }
-  const shapeSensRef = useRef(35)
-  shapeSensRef.current = shapeSens
+  const [shapeSens, setShapeSens] = useState(60)
+  const [shapeRadius, setShapeRadius] = useState(null) // null -> default from model size
+  const shapeSelRef = useRef(null) // { pieceId, faceIndex, sel }
 
   function clearShapeSel() {
     shapeSelRef.current = null
     setShapeMeta(null)
     viewerRef.current?.setShapeHighlight(null)
+  }
+
+  // (Re)run the shape selection from the stored seed with current params —
+  // called on click AND live when a slider moves.
+  function runShapeSelection(pieceId, faceIndex, sens, radius) {
+    const piece = useStore.getState().pieces.find((p) => p.id === pieceId)
+    if (!piece) return
+    const res = growRegion(piece.geometry, faceIndex, sens, radius)
+    if (res.count >= res.triCount * 0.95) {
+      shapeSelRef.current = { pieceId, faceIndex, sel: null }
+      setShapeMeta(null)
+      viewerRef.current.setShapeHighlight(null)
+      useStore.getState().setError(makeT(useStore.getState().lang)('shapeWhole'))
+      return
+    }
+    useStore.getState().setError(null)
+    shapeSelRef.current = { pieceId, faceIndex, sel: res.sel }
+    setShapeMeta({ pieceId, count: res.count })
+    viewerRef.current.setShapeHighlight(regionPositions(piece.geometry, res.sel, res.count))
   }
 
   useEffect(() => {
@@ -79,23 +97,10 @@ export default function App() {
       useStore.getState().rotateModelQuaternion(q)
     }
     viewer.onContextMenu = (x, y) => setCtxMenu({ x, y })
-    // Shape cut: grow a smooth region from the clicked triangle, stop at
-    // creases sharper than the sensitivity, highlight it live.
+    // Shape cut: grow a smooth region from the clicked triangle, bounded by
+    // geodesic radius and creases, highlighted live (see runShapeSelection).
     viewer.onShapePick = (faceIndex, pieceId) => {
-      const piece = useStore.getState().pieces.find((p) => p.id === pieceId)
-      if (!piece) return
-      const res = growRegion(piece.geometry, faceIndex, shapeSensRef.current)
-      if (res.count >= res.triCount * 0.95) {
-        shapeSelRef.current = null
-        setShapeMeta(null)
-        viewer.setShapeHighlight(null)
-        useStore.getState().setError(makeT(useStore.getState().lang)('shapeWhole'))
-        return
-      }
-      useStore.getState().setError(null)
-      shapeSelRef.current = { pieceId, sel: res.sel }
-      setShapeMeta({ pieceId, count: res.count })
-      viewer.setShapeHighlight(regionPositions(piece.geometry, res.sel, res.count))
+      shapePickRef.current?.(faceIndex, pieceId)
     }
     if (import.meta.env.DEV) window.__sfViewer = viewer
     viewerRef.current = viewer
@@ -153,6 +158,8 @@ export default function App() {
     viewerRef.current.shapeMode = activeTool === 'shape'
     if (activeTool !== 'shape') clearShapeSel()
   }, [activeTool])
+
+  const shapePickRef = useRef(null)
 
   async function onDetachShape() {
     const sh = shapeSelRef.current
@@ -409,6 +416,19 @@ export default function App() {
     ? [modelBox.min[s.plane.axis], modelBox.max[s.plane.axis]]
     : [-100, 100]
   const isTiny = dims && Math.max(dims.x, dims.y, dims.z) < 10
+  const maxDim = dims ? Math.max(dims.x, dims.y, dims.z) : 100
+  const effRadius = shapeRadius ?? Math.round(maxDim / 4)
+
+  shapePickRef.current = (faceIndex, pieceId) =>
+    runShapeSelection(pieceId, faceIndex, shapeSens, effRadius)
+
+  // Sliders re-run the selection live from the last clicked seed.
+  useEffect(() => {
+    const seed = shapeSelRef.current
+    if (activeTool === 'shape' && seed) {
+      runShapeSelection(seed.pieceId, seed.faceIndex, shapeSens, effRadius)
+    }
+  }, [shapeSens, shapeRadius])
 
   return (
     <div
@@ -769,6 +789,16 @@ export default function App() {
                 <div className="dims">
                   {shapeMeta ? t('shapeSelected', { n: shapeMeta.count }) : t('shapeHint')}
                 </div>
+                <label>
+                  {t('radius')} ({effRadius} mm)
+                  <input
+                    type="range"
+                    min="1"
+                    max={Math.ceil(maxDim)}
+                    value={effRadius}
+                    onChange={(e) => setShapeRadius(+e.target.value)}
+                  />
+                </label>
                 <label>
                   {t('sensitivity')} ({shapeSens}°)
                   <input

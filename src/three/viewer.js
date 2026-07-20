@@ -206,10 +206,11 @@ export class Viewer {
     g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     this._shapeMesh = new THREE.Mesh(
       g,
+      // Orange, near-opaque: must read clearly on top of the blue pieces.
       new THREE.MeshBasicMaterial({
-        color: 0x2f6bff,
+        color: 0xffb347,
         transparent: true,
-        opacity: 0.55,
+        opacity: 0.85,
         polygonOffset: true,
         polygonOffsetFactor: -2
       })

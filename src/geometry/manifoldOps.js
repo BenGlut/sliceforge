@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import Module from 'manifold-3d'
 import { MeshoptSimplifier } from 'meshoptimizer'
 import { planeBasis } from './plane.js'
+import { niceNormals } from './normals.js'
 
 let wasmPromise = null
 async function getWasm() {
@@ -41,8 +42,7 @@ function manifoldToGeometry(manifold) {
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.BufferAttribute(mesh.vertProperties.slice(), 3))
   g.setIndex(new THREE.BufferAttribute(mesh.triVerts.slice(), 1))
-  g.computeVertexNormals()
-  return g
+  return niceNormals(g)
 }
 
 function polygonArea(poly) {
@@ -217,8 +217,6 @@ export async function planeCut(geometry, plane, params) {
 
     const gTop = manifoldToGeometry(top).applyMatrix4(toWorld)
     const gBottom = manifoldToGeometry(bottom).applyMatrix4(toWorld)
-    gTop.computeVertexNormals()
-    gBottom.computeVertexNormals()
     return [gTop, gBottom]
   } finally {
     solid.delete()
@@ -250,9 +248,7 @@ export async function volumeCut(geometry, matrixArray) {
   const out = []
   for (const part of [solid.subtract(cube), solid.intersect(cube)]) {
     if (!part.isEmpty()) {
-      const g = manifoldToGeometry(part).applyMatrix4(m)
-      g.computeVertexNormals()
-      out.push(g)
+      out.push(manifoldToGeometry(part).applyMatrix4(m))
     }
     part.delete()
   }
@@ -270,18 +266,17 @@ export async function volumeCut(geometry, matrixArray) {
 export async function simplifyGeometry(geometry, ratio) {
   const wasm = await getWasm()
   const solid = geometryToManifold(wasm, geometry)
-  const welded = manifoldToGeometry(solid)
+  const weldedMesh = solid.getMesh()
   solid.delete()
 
   await MeshoptSimplifier.ready
-  const index = new Uint32Array(welded.index.array)
-  const positions = new Float32Array(welded.attributes.position.array)
+  const index = new Uint32Array(weldedMesh.triVerts)
+  const positions = new Float32Array(weldedMesh.vertProperties)
   const target = Math.max(4, Math.floor((index.length * ratio) / 3)) * 3
   const [newIndex] = MeshoptSimplifier.simplify(index, positions, 3, target, 0.05, [])
 
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   g.setIndex(new THREE.BufferAttribute(newIndex, 1))
-  g.computeVertexNormals()
-  return g
+  return niceNormals(g)
 }

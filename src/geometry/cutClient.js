@@ -40,7 +40,7 @@ async function runOp(op, geometry, extra) {
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.BufferAttribute(r.positions, 3))
     if (r.normals) g.setAttribute('normal', new THREE.BufferAttribute(r.normals, 3))
-    g.setIndex(new THREE.BufferAttribute(r.index, 1))
+    if (r.index) g.setIndex(new THREE.BufferAttribute(r.index, 1))
     if (!r.normals) g.computeVertexNormals()
     return g
   })

@@ -80,28 +80,68 @@ function triNormals(geometry) {
   return out
 }
 
-export function growRegion(geometry, seedTri, angleDeg) {
+function triCentroids(geometry) {
+  if (geometry.userData._triCentroids) return geometry.userData._triCentroids
+  const pos = geometry.attributes.position.array
+  const idx = geometry.index?.array ?? null
+  const triCount = (idx ? idx.length : geometry.attributes.position.count) / 3
+  const out = new Float32Array(triCount * 3)
+  for (let t = 0; t < triCount; t++) {
+    let x = 0, y = 0, z = 0
+    for (let k = 0; k < 3; k++) {
+      const v = (idx ? idx[t * 3 + k] : t * 3 + k) * 3
+      x += pos[v]
+      y += pos[v + 1]
+      z += pos[v + 2]
+    }
+    out[t * 3] = x / 3
+    out[t * 3 + 1] = y / 3
+    out[t * 3 + 2] = z / 3
+  }
+  geometry.userData._triCentroids = out
+  return out
+}
+
+/**
+ * Grow from the clicked triangle by geodesic distance over the surface
+ * (radius in model units), additionally stopped by sharp creases. The radius
+ * makes selection predictable on smooth organic sculpts where crease
+ * detection alone floods or stalls.
+ */
+export function growRegion(geometry, seedTri, angleDeg, radius = Infinity) {
   const { neighbors, triCount } = adjacency(geometry)
   const normals = triNormals(geometry)
+  const cent = triCentroids(geometry)
   const cosT = Math.cos((angleDeg * Math.PI) / 180)
   const sel = new Uint8Array(triCount)
+  const dist = new Float32Array(triCount).fill(Infinity)
   const queue = [seedTri]
   sel[seedTri] = 1
+  dist[seedTri] = 0
   let count = 1
   while (queue.length) {
-    const t = queue.pop()
+    const t = queue.shift()
     const nx = normals[t * 3]
     const ny = normals[t * 3 + 1]
     const nz = normals[t * 3 + 2]
     for (let e = 0; e < 3; e++) {
       const nb = neighbors[t * 3 + e]
-      if (nb < 0 || sel[nb]) continue
+      if (nb < 0) continue
       const dot = nx * normals[nb * 3] + ny * normals[nb * 3 + 1] + nz * normals[nb * 3 + 2]
-      if (dot >= cosT) {
+      if (dot < cosT) continue
+      const step = Math.hypot(
+        cent[nb * 3] - cent[t * 3],
+        cent[nb * 3 + 1] - cent[t * 3 + 1],
+        cent[nb * 3 + 2] - cent[t * 3 + 2]
+      )
+      const nd = dist[t] + step
+      if (nd > radius || nd >= dist[nb]) continue
+      dist[nb] = nd
+      if (!sel[nb]) {
         sel[nb] = 1
         count++
-        queue.push(nb)
       }
+      queue.push(nb)
     }
   }
   return { sel, count, triCount }
