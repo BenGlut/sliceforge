@@ -24,6 +24,11 @@ push to main by `.github/workflows/deploy.yml`).
 - Every feature must be **verified before pushing**: run the geometry headless
   in node (see *Testing recipes*) and/or drive the dev server in the browser
   pane. Never push something only believed to work.
+- **Synthetic primitives are NOT sufficient.** Cubes and spheres pass while
+  the real experience fails (learned the hard way: smeared cut shading,
+  crease-only shape selection useless on sculpts). Every geometry/visual
+  feature must ALSO be exercised on the organic reference (the default Ratome
+  model) with screenshots reviewed before shipping.
 - Conversation with the owner in French; everything in the repo in English.
 - UI copy: plain and factual, FR + EN in `src/i18n.js` (both locales in the
   same edit, keys stay in sync).
@@ -83,6 +88,9 @@ Key invariants:
 - All booleans go through Manifold; **weld with `mesh.merge()` in WASM**, never
   three's `mergeVertices` (JS hash map blows up ~1M verts — learned on a real
   189 MB STL).
+- Display normals come from `niceNormals` (normals.js): toCreasedNormals at
+  30° under 500k tris (flat cut faces stay flat next to smooth surfaces),
+  smooth fallback above. NEVER plain computeVertexNormals on cut results.
 - Cuts happen in the plane's local frame (plane -> z=0), results transformed
   back. Pins: peg unioned on the bottom piece, socket (peg + tolerance)
   subtracted from the top piece, placed on the z=0 cross-section.
@@ -146,10 +154,10 @@ mentions anywhere in the repo.
     holes — same holes both sides, bridged by a wooden/printed dowel)
 6b. ~~Place-on-face~~ (OrcaSlicer-style: face tool -> click a face -> model
     rotated so that face lies on the grid; grid re-grounds under it)
-7. ~~Shape cut~~ (crease-bounded region grow from the clicked triangle,
-    sensitivity slider, live highlight; detach = oriented box fitted to the
-    region's boundary plane, fed to volumeCut. Limit: fully smooth necks
-    flood — the UI says so and suggests lowering sensitivity)
+7. ~~Shape cut v2~~ (geodesic-radius grow from the clicked triangle — mm
+    slider, predictable on organic sculpts — combined with crease stops;
+    sliders re-run the selection live from the last seed; orange overlay;
+    detach = boundary-plane-fitted oriented box via volumeCut)
 8. Color cut (vertex colors / texture zones) — needs color-preserving import
 9. Tapered pins ~~done~~ (tip 80% of base, default ON); dovetail + manual pin placement remain
 10. Mesh repair for non-manifold inputs
