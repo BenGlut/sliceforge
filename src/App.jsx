@@ -217,6 +217,17 @@ export default function App() {
   useEffect(() => {
     const onKey = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) useStore.getState().redo()
+        else useStore.getState().undo()
+        return
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault()
+        useStore.getState().redo()
+        return
+      }
       if (e.key === 'Escape') {
         setPinPlacing((placing) => {
           if (placing) return false
@@ -737,7 +748,6 @@ export default function App() {
               <button className="primary" disabled={s.busy} onClick={onCut}>
                 {s.busy ? t('cutting') : t('cut')}
               </button>
-              {s.history.length > 0 && <button onClick={s.undo}>{t('undo')}</button>}
             </section>
 
             <section>
@@ -971,6 +981,16 @@ export default function App() {
               <h3>
                 {t('pieces')} ({s.pieces.length})
               </h3>
+              {(s.history.length > 0 || s.future.length > 0) && (
+                <div className="axis-row">
+                  <button disabled={!s.history.length} onClick={s.undo}>
+                    {t('undo')}
+                  </button>
+                  <button disabled={!s.future.length} onClick={s.redo}>
+                    {t('redo')}
+                  </button>
+                </div>
+              )}
               <ul className="pieces">
                 {s.pieces.map((p, i) => (
                   <li key={p.id} className={p.id === selectedId ? 'selected' : ''}>

@@ -102,8 +102,12 @@ Key invariants:
   are children of the plane object (follow drags); cutParams.manualPins
   overrides auto placement, off-material spots dropped by point-in-polygon.
   A future nicety: tint markers red when off-material instead of silent drop.
-- Store `history` is a stack of previous `pieces` arrays; model transforms
-  reset it (transformed pieces no longer match saved ones).
+- Full undo/redo (⌘Z/⇧⌘Z/Ctrl+Y): `history`/`future` stacks of entries —
+  {kind:'snapshot', pieces} for topology changes (cut/simplify/puzzle),
+  {kind:'matrix', inverse} for in-place transforms (rotate/resize/scale/
+  centre, exact & memory-free; groundAndCenter's delta is folded into the
+  matrix). LIFO discipline keeps shared-geometry mutations consistent; any
+  new action clears `future`; capped at 30 entries.
 
 ## Default model
 
@@ -151,8 +155,7 @@ mentions anywhere in the repo.
 ## objslice parity gaps (from hands-on benchmark of app.objslice.com, 2026-07-20)
 
 Still missing vs their app: bounded cut plane (rect/circle shape, size,
-solid depth => partial cuts); per-piece Move/Scale tools; per-piece lock/duplicate + volume/faces stats; redo (⌘⇧Z) and ⌘Z
-shortcut; 4-step onboarding wizard; zone cut auto-place-on-click had a
+solid depth => partial cuts); per-piece Move/Scale tools; per-piece lock/duplicate + volume/faces stats; 4-step onboarding wizard; zone cut auto-place-on-click had a
 flat-plane variant (partial 'crossed zones'). Their default naming:
 interieur/exterieur.
 

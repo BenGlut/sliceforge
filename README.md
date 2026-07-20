@@ -35,7 +35,8 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
   (meshoptimizer), model stays cuttable
 - **Watertight output** — all booleans run through [Manifold](https://github.com/elalish/manifold)
   (WASM), which guarantees manifold, hole-free results
-- **Pieces manager** — visibility toggles, exploded view, undo
+- **Pieces manager** — visibility toggles, exploded view, full undo/redo
+  (Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z) across cuts, transforms and simplification
 - **Export** STL (one file per piece), 3MF (all pieces in one file), OBJ, GLB
 - **FR / EN** interface
 - 100 % client-side — no upload, no account, models never leave the machine
