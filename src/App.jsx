@@ -7,13 +7,15 @@ import { importModelFile, ACCEPTED } from './io/importers.js'
 import { exportSTL, exportOBJ, exportGLB, export3MF } from './io/exporters.js'
 import { planeBasis } from './geometry/plane.js'
 import { planeCutAsync, simplifyAsync, volumeCutAsync } from './geometry/cutClient.js'
-import { IconCut, IconBox, IconRotate, IconFaceDown, IconGrid, IconLogo } from './icons.jsx'
+import { IconCut, IconBox, IconRotate, IconFaceDown, IconGrid, IconWand, IconLogo } from './icons.jsx'
+import { growRegion, regionPositions, regionOrientedBox } from './geometry/shapeSelect.js'
 
 const TOOLBAR = [
   ['plane', <IconCut key="i" />, 'planeCut'],
   ['volume', <IconBox key="i" />, 'volumeCut'],
   ['rotate', <IconRotate key="i" />, 'modeRotate'],
   ['face', <IconFaceDown key="i" />, 'placeFace'],
+  ['shape', <IconWand key="i" />, 'shapeCut'],
   ['puzzle', <IconGrid key="i" />, 'puzzle']
 ]
 
@@ -33,6 +35,17 @@ export default function App() {
   const [blockSize, setBlockSizeState] = useState({ x: 220, y: 220, z: 250 })
   const [busyMsg, setBusyMsg] = useState(null)
   const [ctxMenu, setCtxMenu] = useState(null)
+  const [shapeMeta, setShapeMeta] = useState(null) // { pieceId, count }
+  const [shapeSens, setShapeSens] = useState(35)
+  const shapeSelRef = useRef(null) // { pieceId, sel }
+  const shapeSensRef = useRef(35)
+  shapeSensRef.current = shapeSens
+
+  function clearShapeSel() {
+    shapeSelRef.current = null
+    setShapeMeta(null)
+    viewerRef.current?.setShapeHighlight(null)
+  }
 
   useEffect(() => {
     if (!ctxMenu) return
@@ -66,6 +79,24 @@ export default function App() {
       useStore.getState().rotateModelQuaternion(q)
     }
     viewer.onContextMenu = (x, y) => setCtxMenu({ x, y })
+    // Shape cut: grow a smooth region from the clicked triangle, stop at
+    // creases sharper than the sensitivity, highlight it live.
+    viewer.onShapePick = (faceIndex, pieceId) => {
+      const piece = useStore.getState().pieces.find((p) => p.id === pieceId)
+      if (!piece) return
+      const res = growRegion(piece.geometry, faceIndex, shapeSensRef.current)
+      if (res.count >= res.triCount * 0.95) {
+        shapeSelRef.current = null
+        setShapeMeta(null)
+        viewer.setShapeHighlight(null)
+        useStore.getState().setError(makeT(useStore.getState().lang)('shapeWhole'))
+        return
+      }
+      useStore.getState().setError(null)
+      shapeSelRef.current = { pieceId, sel: res.sel }
+      setShapeMeta({ pieceId, count: res.count })
+      viewer.setShapeHighlight(regionPositions(piece.geometry, res.sel, res.count))
+    }
     if (import.meta.env.DEV) window.__sfViewer = viewer
     viewerRef.current = viewer
   }, [])
@@ -117,8 +148,41 @@ export default function App() {
   }, [selectedId, s.pieces])
 
   useEffect(() => {
-    if (viewerRef.current) viewerRef.current.faceMode = activeTool === 'face'
+    if (!viewerRef.current) return
+    viewerRef.current.faceMode = activeTool === 'face'
+    viewerRef.current.shapeMode = activeTool === 'shape'
+    if (activeTool !== 'shape') clearShapeSel()
   }, [activeTool])
+
+  async function onDetachShape() {
+    const sh = shapeSelRef.current
+    if (!sh) return
+    s.setBusy(true)
+    s.setError(null)
+    try {
+      const piece = useStore.getState().pieces.find((p) => p.id === sh.pieceId)
+      const matrix = regionOrientedBox(piece.geometry, sh.sel)
+      if (!matrix) throw new Error('no boundary')
+      const parts = await volumeCutAsync(piece.geometry, matrix)
+      if (parts.length === 2) {
+        useStore.getState().replacePiece(
+          piece.id,
+          parts.map((g, i) => ({
+            id: newPieceId(),
+            name: `${piece.name.replace(/\.[^.]+$/, '')}_${i + 1}`,
+            geometry: g,
+            visible: true
+          }))
+        )
+      }
+      clearShapeSel()
+    } catch (e) {
+      console.error(e)
+      s.setError(t('cutError'))
+    } finally {
+      s.setBusy(false)
+    }
+  }
 
   useEffect(() => {
     const onKey = (e) => {
@@ -695,6 +759,32 @@ export default function App() {
                 </div>
                 <button className="primary" disabled={s.busy} onClick={onVolumeCut}>
                   {s.busy ? t('cutting') : t('detach')}
+                </button>
+              </section>
+            )}
+
+            {activeTool === 'shape' && (
+              <section>
+                <h3>{t('shapeCut')}</h3>
+                <div className="dims">
+                  {shapeMeta ? t('shapeSelected', { n: shapeMeta.count }) : t('shapeHint')}
+                </div>
+                <label>
+                  {t('sensitivity')} ({shapeSens}°)
+                  <input
+                    type="range"
+                    min="5"
+                    max="85"
+                    value={shapeSens}
+                    onChange={(e) => setShapeSens(+e.target.value)}
+                  />
+                </label>
+                <button
+                  className="primary"
+                  disabled={s.busy || !shapeMeta}
+                  onClick={onDetachShape}
+                >
+                  {s.busy ? t('cutting') : t('detachShape')}
                 </button>
               </section>
             )}

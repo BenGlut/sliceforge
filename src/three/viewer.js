@@ -63,7 +63,9 @@ export class Viewer {
     // even on multi-million-triangle meshes.
     this.onPieceClick = null
     this.onFacePick = null
+    this.onShapePick = null
     this.faceMode = false
+    this.shapeMode = false
     this.selectedPieceId = null
     this._raycaster = new THREE.Raycaster()
     this._downPos = null
@@ -95,14 +97,17 @@ export class Viewer {
         ),
         this.camera
       )
-      if (this.faceMode) {
-        // Place-on-face: precise triangle raycast (meshes carry no rotation,
-        // so the face normal is already in world space).
+      if (this.faceMode || this.shapeMode) {
+        // Precise triangle raycast (meshes carry no rotation, so face data
+        // is already in world space).
         const hits = this._raycaster.intersectObjects(
           this.piecesGroup.children.filter((m) => m.visible),
           false
         )
-        if (hits[0]?.face) this.onFacePick?.(hits[0].face.normal.clone())
+        const hit = hits[0]
+        if (!hit?.face) return
+        if (this.shapeMode) this.onShapePick?.(hit.faceIndex, hit.object.userData.pieceId)
+        else this.onFacePick?.(hit.face.normal.clone())
         return
       }
       let best = null
@@ -188,6 +193,29 @@ export class Viewer {
     }
   }
 
+
+  setShapeHighlight(positions) {
+    if (this._shapeMesh) {
+      this.scene.remove(this._shapeMesh)
+      this._shapeMesh.geometry.dispose()
+      this._shapeMesh.material.dispose()
+      this._shapeMesh = null
+    }
+    if (!positions) return
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    this._shapeMesh = new THREE.Mesh(
+      g,
+      new THREE.MeshBasicMaterial({
+        color: 0x2f6bff,
+        transparent: true,
+        opacity: 0.55,
+        polygonOffset: true,
+        polygonOffsetFactor: -2
+      })
+    )
+    this.scene.add(this._shapeMesh)
+  }
 
   setSelected(pieceId) {
     this.selectedPieceId = pieceId

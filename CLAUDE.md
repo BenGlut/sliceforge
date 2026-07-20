@@ -146,7 +146,10 @@ mentions anywhere in the repo.
     holes — same holes both sides, bridged by a wooden/printed dowel)
 6b. ~~Place-on-face~~ (OrcaSlicer-style: face tool -> click a face -> model
     rotated so that face lies on the grid; grid re-grounds under it)
-7. Shape cut (click a protruding feature → connected-shell selection)
+7. ~~Shape cut~~ (crease-bounded region grow from the clicked triangle,
+    sensitivity slider, live highlight; detach = oriented box fitted to the
+    region's boundary plane, fed to volumeCut. Limit: fully smooth necks
+    flood — the UI says so and suggests lowering sensitivity)
 8. Color cut (vertex colors / texture zones) — needs color-preserving import
 9. Tapered pins ~~done~~ (tip 80% of base, default ON); dovetail + manual pin placement remain
 10. Mesh repair for non-manifold inputs

@@ -20,6 +20,8 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
 - **Puzzle blocks** — slice a (life-size) model into printable blocks of a
   chosen size (e.g. 230 x 230 x 230 mm) with connectors on every interface:
   round, square or hex pegs, or dowel holes for wooden/printed dowels
+- **Shape cut** — click a protruding detail (a hand, an ear): the smooth
+  region grows up to the surrounding creases, then detaches as its own piece
 - **Volume cut** — position/rotate/scale a box in the viewport and detach
   whatever falls inside it (a hand, a head) as its own piece
 - **Alignment pins** — cylindrical peg/socket pairs auto-placed across the cut
@@ -37,7 +39,6 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
 
 ## Roadmap
 
-- [ ] Shape cut — click a protruding feature, auto-select the connected shell
 - [ ] Color cut — split by vertex-color / texture zones (multi-material printing)
 - [ ] Dovetail connectors, manual pin placement
 - [ ] Mesh repair for non-manifold inputs

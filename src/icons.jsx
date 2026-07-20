@@ -52,6 +52,15 @@ export const IconGrid = () => (
   </svg>
 )
 
+export const IconWand = () => (
+  <svg {...base}>
+    <line x1="4" y1="20" x2="14" y2="10" />
+    <path d="M16.5 3.5 17.6 6.4 20.5 7.5 17.6 8.6 16.5 11.5 15.4 8.6 12.5 7.5 15.4 6.4Z" />
+    <line x1="5" y1="5" x2="5" y2="8" />
+    <line x1="3.5" y1="6.5" x2="6.5" y2="6.5" />
+  </svg>
+)
+
 export const IconLogo = () => (
   <svg {...base} width={18} height={18}>
     <path d="M12 2.5 21 7v10l-9 4.5L3 17V7l9-4.5Z" />
