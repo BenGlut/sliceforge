@@ -56,10 +56,10 @@ function matrixEntry(total) {
 }
 
 export const CONNECTOR_PRESETS = {
-  pin: { pinDiameter: 6, pinLength: 8, tolerance: 0.15 },
-  square: { pinDiameter: 6, pinLength: 8, tolerance: 0.2 },
-  hex: { pinDiameter: 6, pinLength: 8, tolerance: 0.2 },
-  dowel: { pinDiameter: 8, pinLength: 35, tolerance: 0.2 }
+  pin: { pinDiameter: 6, pinLength: 8, tolerance: 0.15, spacing: 25 },
+  square: { pinDiameter: 6, pinLength: 8, tolerance: 0.2, spacing: 25 },
+  hex: { pinDiameter: 6, pinLength: 8, tolerance: 0.2, spacing: 25 },
+  dowel: { pinDiameter: 8, pinLength: 35, tolerance: 0.2, spacing: 45 }
 }
 
 // pieces: [{ id, name, geometry, visible }] — geometry is a THREE.BufferGeometry
@@ -88,7 +88,8 @@ export const useStore = create((set) => ({
     pinLength: 8,
     tolerance: 0.15,
     taper: true,
-    connectorType: 'pin'
+    connectorType: 'pin',
+    spacing: 25
   },
   setCutParams: (patch) => set((s) => ({ cutParams: { ...s.cutParams, ...patch } })),
 

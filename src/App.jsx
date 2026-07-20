@@ -223,6 +223,7 @@ export default function App() {
         )
       }
       clearShapeSel()
+      revealCut()
     } catch (e) {
       console.error(e)
       s.setError(t('cutError'))
@@ -395,6 +396,12 @@ export default function App() {
     }
   }
 
+  // Make the cut visible: gently explode the pieces so the user SEES the
+  // separation and discovers the exploded-view slider.
+  function revealCut() {
+    if (useStore.getState().explode === 0) useStore.getState().setExplode(0.25)
+  }
+
   async function onCut() {
     s.setBusy(true)
     s.setError(null)
@@ -419,6 +426,7 @@ export default function App() {
       }
       setManualPins([])
       setPinPlacing(false)
+      revealCut()
     } catch (e) {
       console.error(e)
       s.setError(t('cutError'))
@@ -508,6 +516,7 @@ export default function App() {
           e.p.name = `${base}_${String(i + 1).padStart(2, '0')}`
         })
       useStore.getState().setPiecesBulk([...current])
+      revealCut()
     } catch (e) {
       console.error(e)
       s.setError(t('cutError'))
@@ -819,6 +828,16 @@ export default function App() {
                       onChange={(e) => s.setCutParams({ tolerance: +e.target.value })}
                     />
                   </label>
+                  <label>
+                    {t('spacing')}
+                    <input
+                      type="number"
+                      min="5"
+                      step="5"
+                      value={s.cutParams.spacing}
+                      onChange={(e) => s.setCutParams({ spacing: +e.target.value })}
+                    />
+                  </label>
                   <label className="inline">
                     <input
                       type="checkbox"
@@ -1005,6 +1024,16 @@ export default function App() {
                     step="0.05"
                     value={s.cutParams.tolerance}
                     onChange={(e) => s.setCutParams({ tolerance: +e.target.value })}
+                  />
+                </label>
+                <label>
+                  {t('spacing')}
+                  <input
+                  type="number"
+                  min="5"
+                  step="5"
+                  value={s.cutParams.spacing}
+                  onChange={(e) => s.setCutParams({ spacing: +e.target.value })}
                   />
                 </label>
                 <button className="primary" disabled={s.busy} onClick={onPuzzle}>

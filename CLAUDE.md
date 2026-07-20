@@ -173,8 +173,12 @@ interieur/exterieur.
     230³; sequential plane cuts skipping non-crossing pieces; blocks renamed
     bottom-layer-first; connector shapes: round/square/hex pegs or dowel
     holes — same holes both sides, bridged by a wooden/printed dowel.
+    Auto-placement count is driven by cutParams.spacing (min distance between
+    connectors, floor 4x pin footprint, cap 12/face) — LuBan-style control.
+    After every cut the view auto-explodes to 0.25 if it was 0 (revealCut in
+    App) so the separation is visible immediately.
     Connector presets via setConnectorType/CONNECTOR_PRESETS (store.js):
-    dowel = standard wood 8 x 35 mm + 0.2 mm hole clearance; values stay
+    dowel = standard wood 8 x 35 mm + 0.2 mm hole clearance + 45 mm spacing; values stay
     editable, tolerance field exposed in both Tenons and Puzzle sections)
 6b. ~~Place-on-face~~ (OrcaSlicer-style: face tool -> click a face -> model
     rotated so that face lies on the grid; grid re-grounds under it)

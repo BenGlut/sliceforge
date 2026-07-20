@@ -150,8 +150,11 @@ function pointInPolygon([px, py], poly) {
  * candidates must fit the whole pin (ring test with margin), then a greedy
  * spread pick — several pins lock rotation, one central pin cannot.
  */
-function pinSpots(polys, r, tol) {
+function pinSpots(polys, r, tol, spacing) {
   const margin = r + tol + 1.5
+  // The user-set minimum spacing drives HOW MANY connectors a face gets;
+  // it can never go below twice the pin footprint (overlap guard).
+  const minDist = Math.max(spacing || 0, 4 * margin)
   const outers = polys.filter((p) => polygonArea(p) > 0)
   const holes = polys.filter((p) => polygonArea(p) < 0)
   const inside = (pt) =>
@@ -176,8 +179,8 @@ function pinSpots(polys, r, tol) {
       if (y < minY) minY = y
       if (y > maxY) maxY = y
     }
-    const nx = Math.min(10, Math.max(2, Math.round((maxX - minX) / (4 * margin))))
-    const ny = Math.min(10, Math.max(2, Math.round((maxY - minY) / (4 * margin))))
+    const nx = Math.min(14, Math.max(2, Math.round(((maxX - minX) / minDist) * 2)))
+    const ny = Math.min(14, Math.max(2, Math.round(((maxY - minY) / minDist) * 2)))
     const cand = []
     const c = polygonCentroid(poly)
     if (c && fits(c)) cand.push(c)
@@ -190,11 +193,10 @@ function pinSpots(polys, r, tol) {
         if (fits(pt)) cand.push(pt)
       }
     }
-    // Greedy farthest-point pick, min spacing scaled to the region size.
-    const minDist = Math.max(6 * margin, Math.sqrt(area) / 3)
+    // Greedy pick honouring the user's minimum spacing.
     const picked = []
     for (const pt of cand) {
-      if (picked.length >= 5) break
+      if (picked.length >= 12) break
       if (picked.every((q) => Math.hypot(pt[0] - q[0], pt[1] - q[1]) >= minDist)) picked.push(pt)
     }
     spots.push(...picked)
@@ -289,7 +291,7 @@ export async function planeCut(geometry, plane, params) {
           (pt) => outers.some((o) => pointInPolygon(pt, o)) && !holes.some((hp) => pointInPolygon(pt, hp))
         )
       } else {
-        spots = pinSpots(polys, r, tol)
+        spots = pinSpots(polys, r, tol, params.spacing)
       }
       // Tapered pegs (tip 80% of base radius) slide into their socket without
       // fighting the first layers — much easier to assemble than straight pins.

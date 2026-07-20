@@ -27,7 +27,7 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
 - **Volume cut** — position/rotate/scale a box in the viewport and detach
   whatever falls inside it (a hand, a head) as its own piece
 - **Alignment pins** — cylindrical peg/socket pairs auto-placed across the cut
-  cross-section (several per region, spread to lock rotation), printable
+  cross-section (as many as the minimum spacing you set allows), printable
   tolerance; pin diameter/length configurable; tapered option (tip 80%)
   for easy assembly — or place them BY HAND: the parts turn transparent and
   each click on the plane drops a connector exactly there
