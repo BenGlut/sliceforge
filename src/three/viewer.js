@@ -66,9 +66,11 @@ export class Viewer {
     this.onShapePick = null
     this.onPlanePick = null
     this.onPlaneChange = null
+    this.onPinPick = null
     this.faceMode = false
     this.shapeMode = false
     this.planeMode = false
+    this.pinMode = false
     this.selectedPieceId = null
     this._raycaster = new THREE.Raycaster()
     this._downPos = null
@@ -101,6 +103,16 @@ export class Viewer {
         this.camera
       )
       if (this.planeMode && this.planeGizmo?.dragging) return
+      // Connector placement: clicks land on the plane quad, in plane-local mm.
+      if (this.pinMode && this.planeObj?.visible) {
+        const hit = this._raycaster.intersectObject(this.planeObj, false)[0]
+        if (hit) {
+          const local = this.planeObj.worldToLocal(hit.point.clone())
+          const sc = this.planeObj.scale.x
+          this.onPinPick?.(local.x * sc, local.y * sc)
+        }
+        return
+      }
       if (this.faceMode || this.shapeMode || this.planeMode) {
         // Precise triangle raycast (meshes carry no rotation, so face data
         // is already in world space).
@@ -374,6 +386,40 @@ export class Viewer {
 
   setPlaneGizmoMode(mode) {
     this.planeGizmo?.setMode(mode)
+  }
+
+  // Connector markers live as children of the plane object, so they follow
+  // its drags for free. Positions are plane-local mm; the parent's uniform
+  // scale is compensated per marker.
+  setPinMarkers(uvList, pinDiameter, pinLength) {
+    if (!this.planeObj) return
+    if (!this._pinGroup) {
+      this._pinGroup = new THREE.Group()
+      this.planeObj.add(this._pinGroup)
+    }
+    this._pinGroup.clear()
+    const sc = this.planeObj.scale.x
+    for (const [u, v] of uvList) {
+      const m = new THREE.Mesh(
+        new THREE.CylinderGeometry(pinDiameter / 2, pinDiameter / 2, pinLength, 24),
+        new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.9 })
+      )
+      m.rotation.x = Math.PI / 2
+      m.scale.setScalar(1 / sc)
+      m.position.set(u / sc, v / sc, 0)
+      this._pinGroup.add(m)
+    }
+  }
+
+  // Ghost the parts so the plane (and the connectors on it) read through
+  // the material while placing.
+  setPiecesGhost(on) {
+    for (const mesh of this.piecesGroup.children) {
+      mesh.material.transparent = on
+      mesh.material.opacity = on ? 0.35 : 1
+      mesh.material.depthWrite = !on
+      mesh.material.needsUpdate = true
+    }
   }
 
   hidePlane() {

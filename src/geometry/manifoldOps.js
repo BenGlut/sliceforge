@@ -210,10 +210,12 @@ function pinSpots(polys, r, tol) {
 export async function planeCut(geometry, plane, params) {
   const wasm = await getWasm()
   const { Manifold } = wasm
-  const { normal, origin } = planeBasis(plane)
+  const { origin } = planeBasis(plane)
 
-  // Work in the plane's local frame: cut plane becomes z = 0.
-  const q = new THREE.Quaternion().setFromUnitVectors(normal, new THREE.Vector3(0, 0, 1))
+  // Work in the plane's FULL local frame (its quaternion, not just the
+  // normal): cut plane becomes z = 0 and the in-plane x/y axes match the
+  // viewport plane object, so manual connector (u,v) coords line up exactly.
+  const q = new THREE.Quaternion(...plane.quat).invert()
   const toLocal = new THREE.Matrix4()
     .makeRotationFromQuaternion(q)
     .multiply(new THREE.Matrix4().makeTranslation(-origin.x, -origin.y, -origin.z))
@@ -276,10 +278,23 @@ export async function planeCut(geometry, plane, params) {
       const tol = Math.max(0, params.tolerance)
       const section = solid.slice(0)
       cleanup.push(section)
+      const polys = section.toPolygons()
+      // Manual connectors (plane-local mm coords placed in the viewport) win
+      // over automatic placement; spots outside the material are dropped.
+      let spots
+      if (params.manualPins?.length) {
+        const outers = polys.filter((p) => polygonArea(p) > 0)
+        const holes = polys.filter((p) => polygonArea(p) < 0)
+        spots = params.manualPins.filter(
+          (pt) => outers.some((o) => pointInPolygon(pt, o)) && !holes.some((hp) => pointInPolygon(pt, hp))
+        )
+      } else {
+        spots = pinSpots(polys, r, tol)
+      }
       // Tapered pegs (tip 80% of base radius) slide into their socket without
       // fighting the first layers — much easier to assemble than straight pins.
       const rTip = params.taper && type !== 'dowel' ? r * 0.8 : r
-      for (const [x, y] of pinSpots(section.toPolygons(), r, tol)) {
+      for (const [x, y] of spots) {
         if (type === 'dowel') {
           const hole = matchProps(
             Manifold.cylinder(h + 2 * tol, r + tol, r + tol, seg, true).translate([x, y, 0]),

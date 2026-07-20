@@ -32,6 +32,8 @@ export default function App() {
   const [activeTool, setActiveTool] = useState(null) // null | 'plane' | 'rotate' | 'volume'
   const [volumeMode, setVolumeMode] = useState('translate')
   const [planeMode, setPlaneMode] = useState('translate')
+  const [pinPlacing, setPinPlacing] = useState(false)
+  const [manualPins, setManualPins] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [blockSize, setBlockSizeState] = useState({ x: 220, y: 220, z: 250 })
   const [busyMsg, setBusyMsg] = useState(null)
@@ -101,6 +103,16 @@ export default function App() {
     // Draggable cut plane: gizmo drags write back to the store; clicking the
     // model in plane mode snaps the plane there, oriented to the surface.
     viewer.onPlaneChange = ({ pos, quat }) => useStore.getState().setPlane({ pos, quat })
+    // Manual connectors: click the plane to drop one, click near one to
+    // remove it (plane-local mm, so markers follow plane drags).
+    viewer.onPinPick = (u, v) => {
+      setManualPins((pins) => {
+        const r = Math.max(3, useStore.getState().cutParams.pinDiameter)
+        const idx = pins.findIndex(([pu, pv]) => Math.hypot(pu - u, pv - v) < r)
+        if (idx >= 0) return pins.filter((_, i) => i !== idx)
+        return [...pins, [u, v]]
+      })
+    }
     viewer.onPlanePick = (point, normal) => {
       const quat = new THREE.Quaternion().setFromUnitVectors(
         new THREE.Vector3(0, 0, 1),
@@ -206,9 +218,13 @@ export default function App() {
     const onKey = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
       if (e.key === 'Escape') {
-        setActiveTool(null)
-        setSelectedId(null)
-        setCtxMenu(null)
+        setPinPlacing((placing) => {
+          if (placing) return false
+          setActiveTool(null)
+          setSelectedId(null)
+          setCtxMenu(null)
+          return placing
+        })
         return
       }
       const idx = Number(e.key) - 1
@@ -295,6 +311,26 @@ export default function App() {
     if (viewerRef.current) viewerRef.current.planeMode = activeTool === 'plane'
   }, [activeTool])
 
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer) return
+    const active = pinPlacing && activeTool === 'plane'
+    viewer.pinMode = active
+    viewer.setPiecesGhost(active)
+    return () => viewer.setPiecesGhost(false)
+  }, [pinPlacing, activeTool, s.pieces])
+
+  useEffect(() => {
+    viewerRef.current?.setPinMarkers(manualPins, s.cutParams.pinDiameter, s.cutParams.pinLength)
+  }, [manualPins, s.cutParams.pinDiameter, s.cutParams.pinLength, s.plane, activeTool])
+
+  useEffect(() => {
+    if (activeTool !== 'plane') {
+      setPinPlacing(false)
+      setManualPins([])
+    }
+  }, [activeTool])
+
   async function onFiles(files) {
     const file = files?.[0]
     if (!file) return
@@ -321,7 +357,10 @@ export default function App() {
       // Cut every visible piece the plane actually crosses.
       const targets = s.pieces.filter((p) => p.visible)
       for (const piece of targets) {
-        const parts = await planeCutAsync(piece.geometry, s.plane, s.cutParams)
+        const parts = await planeCutAsync(piece.geometry, s.plane, {
+          ...s.cutParams,
+          manualPins: manualPins.length ? manualPins : undefined
+        })
         if (parts.length < 2) continue
         useStore.getState().replacePiece(
           piece.id,
@@ -333,6 +372,8 @@ export default function App() {
           }))
         )
       }
+      setManualPins([])
+      setPinPlacing(false)
     } catch (e) {
       console.error(e)
       s.setError(t('cutError'))
@@ -402,7 +443,10 @@ export default function App() {
             next.push(piece)
             continue
           }
-          const parts = await planeCutAsync(piece.geometry, plane, s.cutParams)
+          const parts = await planeCutAsync(piece.geometry, plane, {
+            ...s.cutParams,
+            manualPins: undefined
+          })
           if (parts.length < 2) next.push(piece)
           else
             parts.forEach((g) =>
@@ -747,6 +791,21 @@ export default function App() {
                     />
                     {t('taper')}
                   </label>
+                  <button
+                    className={pinPlacing ? 'active' : ''}
+                    onClick={() => setPinPlacing((v) => !v)}
+                  >
+                    {t('placePins')}
+                  </button>
+                  {pinPlacing && <div className="dims">{t('pinsHint')}</div>}
+                  {manualPins.length > 0 && (
+                    <div className="simplify-row">
+                      <span className="dims" style={{ flex: 1 }}>
+                        {t('pinsPlaced', { n: manualPins.length })}
+                      </span>
+                      <button onClick={() => setManualPins([])}>{t('clearPins')}</button>
+                    </div>
+                  )}
                   <label>
                     {t('connector')}
                     <div className="axis-row">

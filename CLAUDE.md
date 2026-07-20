@@ -96,7 +96,12 @@ Key invariants:
   clicking the model in plane mode snaps the plane to the surface (onPlanePick).
   Axis presets set quat + recenter. Cuts happen in the plane's local frame
   (plane -> z=0), results transformed back. Pins: peg unioned on the bottom piece, socket (peg + tolerance)
-  subtracted from the top piece, placed on the z=0 cross-section.
+  subtracted from the top piece, placed on the z=0 cross-section. Manual
+  connectors: 'place by hand' mode ghosts the parts (setPiecesGhost), clicks
+  on the plane quad give plane-local mm (u,v) stored in App state, markers
+  are children of the plane object (follow drags); cutParams.manualPins
+  overrides auto placement, off-material spots dropped by point-in-polygon.
+  A future nicety: tint markers red when off-material instead of silent drop.
 - Store `history` is a stack of previous `pieces` arrays; model transforms
   reset it (transformed pieces no longer match saved ones).
 
@@ -146,9 +151,7 @@ mentions anywhere in the repo.
 ## objslice parity gaps (from hands-on benchmark of app.objslice.com, 2026-07-20)
 
 Still missing vs their app: bounded cut plane (rect/circle shape, size,
-solid depth => partial cuts); MANUAL connector placement on the cut surface
-(part turns transparent, click to drop connectors); per-piece Move/Scale
-tools; per-piece lock/duplicate + volume/faces stats; redo (⌘⇧Z) and ⌘Z
+solid depth => partial cuts); per-piece Move/Scale tools; per-piece lock/duplicate + volume/faces stats; redo (⌘⇧Z) and ⌘Z
 shortcut; 4-step onboarding wizard; zone cut auto-place-on-click had a
 flat-plane variant (partial 'crossed zones'). Their default naming:
 interieur/exterieur.

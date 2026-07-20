@@ -27,7 +27,8 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
 - **Alignment pins** — cylindrical peg/socket pairs auto-placed across the cut
   cross-section (several per region, spread to lock rotation), printable
   tolerance; pin diameter/length configurable; tapered option (tip 80%)
-  for easy assembly
+  for easy assembly — or place them BY HAND: the parts turn transparent and
+  each click on the plane drops a connector exactly there
 - **Color aware** — vertex colors and material colors survive import,
   cutting and simplification; cut faces render a clean neutral grey
 - **Mesh simplification** — decimate heavy scans to a chosen percentage
