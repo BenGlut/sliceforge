@@ -10,12 +10,13 @@ function getWorker() {
   if (!worker) {
     worker = new Worker(new URL('./cut.worker.js', import.meta.url), { type: 'module' })
     worker.onmessage = (e) => {
-      const { id, ok, results, error } = e.data
+      const { id, ok, results, plain, error } = e.data
       const p = pending.get(id)
       if (!p) return
       pending.delete(id)
-      if (ok) p.resolve(results)
-      else p.reject(new Error(error))
+      if (!ok) p.reject(new Error(error))
+      else if (plain !== undefined) p.resolve({ plain })
+      else p.resolve(results)
     }
     worker.onerror = (e) => {
       for (const p of pending.values()) p.reject(new Error(e.message || 'worker error'))
@@ -54,3 +55,17 @@ export const planeCutAsync = (geometry, plane, params) =>
 export const simplifyAsync = (geometry, ratio) => runOp('simplify', geometry, { params: { ratio } })
 
 export const volumeCutAsync = (geometry, matrix) => runOp('volumeCut', geometry, { params: { matrix } })
+
+// Plain-data op: connector preview poses (no geometry comes back).
+export async function pinPreviewAsync(geometry, planes, params) {
+  const id = ++seq
+  const positions = new Float32Array(geometry.attributes.position.array)
+  const index = geometry.index ? new Uint32Array(geometry.index.array) : null
+  const promise = new Promise((resolve, reject) => pending.set(id, { resolve, reject }))
+  getWorker().postMessage(
+    { id, op: 'pinPreview', positions, index, params: { ...params, planes } },
+    [positions.buffer, index?.buffer].filter(Boolean)
+  )
+  const res = await promise
+  return res.plain ?? []
+}

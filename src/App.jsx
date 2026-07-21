@@ -6,7 +6,7 @@ import { Viewer, PIECE_COLORS } from './three/viewer.js'
 import { importModelFile, ACCEPTED } from './io/importers.js'
 import { exportSTL, exportOBJ, exportGLB, export3MF } from './io/exporters.js'
 import { AXIS_QUATS } from './geometry/plane.js'
-import { planeCutAsync, simplifyAsync, volumeCutAsync } from './geometry/cutClient.js'
+import { planeCutAsync, simplifyAsync, volumeCutAsync, pinPreviewAsync } from './geometry/cutClient.js'
 import { IconCut, IconBox, IconRotate, IconFaceDown, IconGrid, IconWand, IconLogo } from './icons.jsx'
 import { growRegion, regionPositions, regionOrientedBox } from './geometry/shapeSelect.js'
 
@@ -54,6 +54,45 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null)
   const [blockSize, setBlockSizeState] = useState({ x: 220, y: 220, z: 250 })
   const [busyMsg, setBusyMsg] = useState(null)
+  const [pinPreviewOn, setPinPreviewOn] = useState(false)
+
+  function clearPinPreview() {
+    setPinPreviewOn(false)
+    viewerRef.current?.setPinPreview(null)
+    viewerRef.current?.setPiecesGhost(false)
+  }
+
+  // Compute where the puzzle's connectors will land (same engine as the
+  // cut) and show them as orange ghosts through transparent pieces.
+  async function onPreviewPins() {
+    const st = useStore.getState()
+    s.setBusy(true)
+    s.setError(null)
+    try {
+      const box = new THREE.Box3()
+      st.pieces.forEach((p) => {
+        if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
+        box.union(p.geometry.boundingBox)
+      })
+      const planes = puzzlePlanes(box, blockSize).map(({ axis, offset }) => {
+        const pos = [0, 0, 0]
+        pos[{ x: 0, y: 1, z: 2 }[axis]] = offset
+        return { pos, quat: AXIS_QUATS[axis] }
+      })
+      const all = []
+      for (const piece of st.pieces.filter((p) => p.visible)) {
+        all.push(...(await pinPreviewAsync(piece.geometry, planes, st.cutParams)))
+      }
+      viewerRef.current.setPinPreview(all, st.cutParams.pinDiameter, st.cutParams.pinLength)
+      viewerRef.current.setPiecesGhost(true)
+      setPinPreviewOn(true)
+    } catch (e) {
+      console.error(e)
+      s.setError(t('cutError'))
+    } finally {
+      s.setBusy(false)
+    }
+  }
   const [ctxMenu, setCtxMenu] = useState(null)
   const [shapeMeta, setShapeMeta] = useState(null) // { pieceId, count }
   const [shapeSens, setShapeSens] = useState(60)
@@ -362,6 +401,7 @@ export default function App() {
 
   // Live preview of the puzzle grid while the tool is open.
   useEffect(() => {
+    clearPinPreview()
     const viewer = viewerRef.current
     if (!viewer) return
     if (activeTool !== 'puzzle' || !s.pieces.length) {
@@ -524,6 +564,7 @@ export default function App() {
           e.p.name = `${base}_${String(i + 1).padStart(2, '0')}`
         })
       useStore.getState().setPiecesBulk([...current])
+      clearPinPreview()
       revealCut()
     } catch (e) {
       console.error(e)
@@ -1044,6 +1085,13 @@ export default function App() {
                   onChange={(e) => s.setCutParams({ spacing: +e.target.value })}
                   />
                 </label>
+                <button
+                  className={pinPreviewOn ? 'active' : ''}
+                  disabled={s.busy}
+                  onClick={() => (pinPreviewOn ? clearPinPreview() : onPreviewPins())}
+                >
+                  {t('previewPins')}
+                </button>
                 <button className="primary" disabled={s.busy} onClick={onPuzzle}>
                   {s.busy ? busyMsg || t('cutting') : t('generate')}
                 </button>

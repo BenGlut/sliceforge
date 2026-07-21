@@ -404,6 +404,26 @@ export class Viewer {
     this.planeGizmo?.setMode(mode)
   }
 
+  // Orange ghost markers showing where connector reservations will land
+  // (world-space poses computed by the same engine as the cut).
+  setPinPreview(pins, pinDiameter, pinLength) {
+    if (!this._pinPreviewGroup) {
+      this._pinPreviewGroup = new THREE.Group()
+      this.scene.add(this._pinPreviewGroup)
+    }
+    this._pinPreviewGroup.clear()
+    if (!pins?.length) return
+    const geo = new THREE.CylinderGeometry(pinDiameter / 2, pinDiameter / 2, pinLength, 24)
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.9 })
+    const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0))
+    for (const pin of pins) {
+      const m = new THREE.Mesh(geo, mat)
+      m.position.fromArray(pin.center)
+      m.quaternion.fromArray(pin.quat).multiply(tilt)
+      this._pinPreviewGroup.add(m)
+    }
+  }
+
   // Puzzle preview: one translucent quad per upcoming grid cut, bounded to
   // the model box, updated live as the block size changes.
   setPuzzlePreview(planes, box) {

@@ -94,6 +94,80 @@ function paintFaces(g, planeTest) {
   col.needsUpdate = true
 }
 
+/**
+ * Final connector placements on the z=0 cross-section of `solid` (local
+ * frame): candidate spots (auto grid or manual clicks) are validated in 3D —
+ * the reservation plus a 1.2 mm wall margin must sit fully INSIDE the solid,
+ * so no connector ever pierces the outer shell. If the centred (50/50)
+ * position leaks, the reservation is slid along the axis to 30/70 then 70/30;
+ * if nothing fits, the spot is dropped. Returns [x, y, zOffset] triples.
+ * Shared by the actual cut and the orange preview, so they always agree.
+ */
+const PIN_WALL = 1.2
+function pinPlacements(wasm, solid, params) {
+  const { Manifold } = wasm
+  const r = Math.max(0.2, params.pinDiameter / 2)
+  const h = Math.max(1, params.pinLength)
+  const tol = Math.max(0, params.tolerance)
+  const section = solid.slice(0)
+  const polys = section.toPolygons()
+  section.delete()
+  let spots
+  if (params.manualPins?.length) {
+    const outers = polys.filter((p) => polygonArea(p) > 0)
+    const holes = polys.filter((p) => polygonArea(p) < 0)
+    spots = params.manualPins.filter(
+      (pt) => outers.some((o) => pointInPolygon(pt, o)) && !holes.some((hp) => pointInPolygon(pt, hp))
+    )
+  } else {
+    spots = pinSpots(polys, r, tol, params.spacing)
+  }
+  const testR = r + tol + PIN_WALL
+  const testH = h + 2 * tol + 2 * PIN_WALL
+  const placements = []
+  for (const [x, y] of spots) {
+    for (const off of [0, 0.2 * h, -0.2 * h]) {
+      const tester = Manifold.cylinder(testH, testR, testR, 16, true).translate([x, y, off])
+      const leak = tester.subtract(solid)
+      const fits = leak.isEmpty() || leak.volume() < 0.05
+      tester.delete()
+      leak.delete()
+      if (fits) {
+        placements.push([x, y, off])
+        break
+      }
+    }
+  }
+  return placements
+}
+
+/**
+ * Preview-only: where would the connectors land for these cut planes?
+ * Runs the exact same placement logic as the cut, against the given
+ * geometry, and returns world-space poses for the orange ghost markers.
+ */
+export async function previewPins(geometry, planes, params) {
+  const wasm = await getWasm()
+  const out = []
+  for (const plane of planes) {
+    const { origin } = planeBasis(plane)
+    const q = new THREE.Quaternion(...plane.quat).invert()
+    const toLocal = new THREE.Matrix4()
+      .makeRotationFromQuaternion(q)
+      .multiply(new THREE.Matrix4().makeTranslation(-origin.x, -origin.y, -origin.z))
+    const toWorld = toLocal.clone().invert()
+    const gLocal = geometry.clone().applyMatrix4(toLocal)
+    const solid = geometryToManifold(wasm, gLocal)
+    gLocal.dispose()
+    for (const [u, v, off] of pinPlacements(wasm, solid, params)) {
+      const center = new THREE.Vector3(u, v, off).applyMatrix4(toWorld)
+      out.push({ center: center.toArray(), quat: plane.quat })
+    }
+    solid.delete()
+  }
+  return out
+}
+
 // Tool solids (pins, cutting boxes) meeting a colored model in a boolean:
 // give them 3 colour properties (setProperties counts EXTRA props, position
 // excluded) so the faces they create read as neutral grey, not black.
@@ -278,28 +352,13 @@ export async function planeCut(geometry, plane, params) {
       const r = Math.max(0.2, params.pinDiameter / 2)
       const h = Math.max(1, params.pinLength)
       const tol = Math.max(0, params.tolerance)
-      const section = solid.slice(0)
-      cleanup.push(section)
-      const polys = section.toPolygons()
-      // Manual connectors (plane-local mm coords placed in the viewport) win
-      // over automatic placement; spots outside the material are dropped.
-      let spots
-      if (params.manualPins?.length) {
-        const outers = polys.filter((p) => polygonArea(p) > 0)
-        const holes = polys.filter((p) => polygonArea(p) < 0)
-        spots = params.manualPins.filter(
-          (pt) => outers.some((o) => pointInPolygon(pt, o)) && !holes.some((hp) => pointInPolygon(pt, hp))
-        )
-      } else {
-        spots = pinSpots(polys, r, tol, params.spacing)
-      }
       // Tapered pegs (tip 80% of base radius) slide into their socket without
       // fighting the first layers — much easier to assemble than straight pins.
       const rTip = params.taper && type !== 'dowel' ? r * 0.8 : r
-      for (const [x, y] of spots) {
+      for (const [x, y, off] of pinPlacements(wasm, solid, params)) {
         if (type === 'dowel') {
           const hole = matchProps(
-            Manifold.cylinder(h + 2 * tol, r + tol, r + tol, seg, true).translate([x, y, 0]),
+            Manifold.cylinder(h + 2 * tol, r + tol, r + tol, seg, true).translate([x, y, off]),
             hasColor
           )
           cleanup.push(hole)
@@ -311,11 +370,11 @@ export async function planeCut(geometry, plane, params) {
           continue
         }
         const peg = matchProps(
-          Manifold.cylinder(h, r, rTip, seg, true).translate([x, y, 0]),
+          Manifold.cylinder(h, r, rTip, seg, true).translate([x, y, off]),
           hasColor
         )
         const socket = matchProps(
-          Manifold.cylinder(h + 2 * tol, r + tol, rTip + tol, seg, true).translate([x, y, 0]),
+          Manifold.cylinder(h + 2 * tol, r + tol, rTip + tol, seg, true).translate([x, y, off]),
           hasColor
         )
         cleanup.push(peg, socket)

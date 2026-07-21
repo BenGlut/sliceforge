@@ -21,7 +21,10 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
   chosen size (e.g. 230 x 230 x 230 mm), with a live preview of every cut
   plane on the model before you commit, and connectors on every interface:
   round, square or hex pegs, or dowel holes preset for standard 8 x 35 mm
-  wooden dowels (adjustable hole clearance)
+  wooden dowels (adjustable hole clearance); connectors NEVER pierce the
+  outer shell — reservations keep a 1.2 mm wall, slide to a 30/70 split when
+  one side is shallow, or are skipped; preview them as orange ghosts before
+  committing the cut
 - **Shape cut** — click a protruding detail (a hand, an ear): the smooth
   region grows up to the surrounding creases, then detaches as its own piece
 - **Volume cut** — position/rotate/scale a box in the viewport and detach

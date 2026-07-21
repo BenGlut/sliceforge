@@ -102,6 +102,12 @@ Key invariants:
   are children of the plane object (follow drags); cutParams.manualPins
   overrides auto placement, off-material spots dropped by point-in-polygon.
   A future nicety: tint markers red when off-material instead of silent drop.
+- **Shell-safe connectors**: every placement (auto AND manual) passes a 3D
+  containment test in pinPlacements() — the reservation + 1.2 mm wall margin
+  (PIN_WALL) must fit INSIDE the solid (tester cylinder subtract, isEmpty or
+  volume < 0.05); if 50/50 leaks it slides to 30/70 then 70/30 (±0.2h), else
+  the spot is dropped. previewPins() runs the SAME logic and feeds the orange
+  ghost markers (Puzzle 'Show the connectors' button, pieces ghosted).
 - Full undo/redo (⌘Z/⇧⌘Z/Ctrl+Y): `history`/`future` stacks of entries —
   {kind:'snapshot', pieces} for topology changes (cut/simplify/puzzle),
   {kind:'matrix', inverse} for in-place transforms (rotate/resize/scale/
