@@ -322,6 +322,7 @@ export async function planeCut(geometry, plane, params) {
 
   const kerf = Math.max(0, params.kerf || 0)
   const cleanup = []
+  let dowelCount = 0
   try {
     let top, bottom
     if (hasColor) {
@@ -371,7 +372,9 @@ export async function planeCut(geometry, plane, params) {
       // Tapered pegs (tip 80% of base radius) slide into their socket without
       // fighting the first layers — much easier to assemble than straight pins.
       const rTip = params.taper && type !== 'dowel' ? r * 0.8 : r
-      for (const [x, y, off] of pinPlacements(wasm, solid, params)) {
+      const placements = pinPlacements(wasm, solid, params)
+      if (type === 'dowel') dowelCount = placements.length
+      for (const [x, y, off] of placements) {
         if (type === 'dowel') {
           const hole = matchProps(
             Manifold.cylinder(h + 2 * tol, r + tol, r + tol, seg, true).translate([x, y, off]),
@@ -411,7 +414,9 @@ export async function planeCut(geometry, plane, params) {
     }
     gTop.applyMatrix4(toWorld)
     gBottom.applyMatrix4(toWorld)
-    return [gTop, gBottom]
+    const res = [gTop, gBottom]
+    res.dowelCount = dowelCount
+    return res
   } finally {
     solid.delete()
     for (const m of cleanup) {

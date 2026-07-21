@@ -535,6 +535,39 @@ export default function App() {
     }
   }
 
+  const isDowelPiece = (p) => p.name.startsWith('tourillon_')
+
+  // Printable dowels: the HOLES carry the tolerance, the dowel itself is the
+  // exact nominal diameter. One piece per size, count in its name.
+  function addDowelPiece(count) {
+    if (!count) return
+    const st = useStore.getState()
+    const cp = st.cutParams
+    const base = `tourillon_${cp.pinDiameter}x${cp.pinLength}`
+    const existing = st.pieces.find((x) => x.name.startsWith(base))
+    const prev = existing ? parseInt(existing.name.match(/_x(\d+)$/)?.[1] ?? '0', 10) : 0
+    const total = prev + count
+    const box = new THREE.Box3()
+    st.pieces.forEach((q) => {
+      if (isDowelPiece(q)) return
+      if (!q.geometry.boundingBox) q.geometry.computeBoundingBox()
+      box.union(q.geometry.boundingBox)
+    })
+    const g = new THREE.CylinderGeometry(cp.pinDiameter / 2, cp.pinDiameter / 2, cp.pinLength, 48)
+    g.translate((box.isEmpty() ? 0 : box.max.x) + 15 + cp.pinDiameter, cp.pinLength / 2, 0)
+    const name = `${base}_x${total}`
+    if (existing) {
+      useStore.getState().setPiecesBulk(
+        st.pieces.map((q) => (q === existing ? { ...q, name, geometry: g } : q))
+      )
+    } else {
+      useStore.getState().setPiecesBulk([
+        ...st.pieces,
+        { id: newPieceId(), name, geometry: g, visible: true }
+      ])
+    }
+  }
+
   // Make the cut visible: gently explode the pieces (real mm, scaled to the
   // model) so the user SEES the separation and discovers the slider.
   function revealCut() {
@@ -554,13 +587,15 @@ export default function App() {
     s.setError(null)
     try {
       // Cut every visible piece the plane actually crosses.
-      const targets = s.pieces.filter((p) => p.visible)
+      const targets = s.pieces.filter((p) => p.visible && !isDowelPiece(p))
+      let dowels = 0
       for (const piece of targets) {
         const parts = await planeCutAsync(piece.geometry, s.plane, {
           ...s.cutParams,
           manualPins: manualPins.length ? manualPins : undefined
         })
         if (parts.length < 2) continue
+        dowels += parts.dowelCount ?? 0
         useStore.getState().replacePiece(
           piece.id,
           parts.map((g, i) => ({
@@ -571,6 +606,7 @@ export default function App() {
           }))
         )
       }
+      addDowelPiece(dowels)
       setManualPins([])
       setPinPlacing(false)
       revealCut()
@@ -622,8 +658,10 @@ export default function App() {
         return { axis, offset, pos, quat: AXIS_QUATS[axis] }
       })
       const edited = puzzlePins
-      let current = s.pieces.filter((p) => p.visible)
+      const kept = s.pieces.filter((p) => !p.visible || isDowelPiece(p))
+      let current = s.pieces.filter((p) => p.visible && !isDowelPiece(p))
       let done = 0
+      let dowels = 0
       for (let planeIdx = 0; planeIdx < planes.length; planeIdx++) {
         const plane = planes[planeIdx]
         const next = []
@@ -643,6 +681,7 @@ export default function App() {
               ? edited.filter((pin) => pin.planeIdx === planeIdx).map(({ u, v }) => [u, v])
               : undefined
           })
+          dowels += parts.dowelCount ?? 0
           if (parts.length < 2) next.push(piece)
           else
             parts.forEach((g) =>
@@ -666,7 +705,8 @@ export default function App() {
         .forEach((e, i) => {
           e.p.name = `${base}_${String(i + 1).padStart(2, '0')}`
         })
-      useStore.getState().setPiecesBulk([...current])
+      useStore.getState().setPiecesBulk([...kept, ...current])
+      addDowelPiece(dowels)
       clearPinPreview()
       revealCut()
     } catch (e) {

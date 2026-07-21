@@ -16,7 +16,10 @@ function getWorker() {
       pending.delete(id)
       if (!ok) p.reject(new Error(error))
       else if (plain !== undefined) p.resolve({ plain })
-      else p.resolve(results)
+      else {
+        if (results) results.dowelCount = e.data.dowelCount ?? 0
+        p.resolve(results)
+      }
     }
     worker.onerror = (e) => {
       for (const p of pending.values()) p.reject(new Error(e.message || 'worker error'))
@@ -38,7 +41,7 @@ async function runOp(op, geometry, extra) {
     [positions.buffer, colors?.buffer, index?.buffer].filter(Boolean)
   )
   const results = await promise
-  return results.map((r) => {
+  const mapped = results.map((r) => {
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.BufferAttribute(r.positions, 3))
     if (r.colors) g.setAttribute('color', new THREE.BufferAttribute(r.colors, 3))
@@ -47,6 +50,8 @@ async function runOp(op, geometry, extra) {
     if (!r.normals) g.computeVertexNormals()
     return g
   })
+  mapped.dowelCount = results.dowelCount ?? 0
+  return mapped
 }
 
 export const planeCutAsync = (geometry, plane, params) =>

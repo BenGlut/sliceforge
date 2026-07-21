@@ -108,6 +108,11 @@ Key invariants:
   volume < 0.05); if 50/50 leaks it slides to 30/70 then 70/30 (±0.2h), else
   the spot is dropped. previewPins() runs the SAME logic and feeds the orange
   ghost markers (Puzzle 'Show the connectors' button, pieces ghosted).
+- **Printable dowels**: dowel cuts add/update a `tourillon_DxL_xN` piece —
+  a cylinder at the EXACT nominal diameter (tolerance lives in the holes
+  only), standing grounded beside the model, count accumulated in the name,
+  excluded from later cuts (isDowelPiece guard), exported like any piece.
+  Engine reports placed-dowel counts via results.dowelCount.
 - **Connectors never collide**: previewPins rejects cross-plane overlaps via
   segment-distance reservations (collide.js, 1 mm clearance); at generation,
   earlier holes void material so the containment test self-avoids them. The

@@ -36,7 +36,7 @@ self.onmessage = async (e) => {
     const transfer = payload.flatMap((p) =>
       [...new Set([p.positions.buffer, p.colors?.buffer, p.normals?.buffer, p.index?.buffer])].filter(Boolean)
     )
-    self.postMessage({ id, ok: true, results: payload }, transfer)
+    self.postMessage({ id, ok: true, results: payload, dowelCount: results.dowelCount ?? 0 }, transfer)
   } catch (err) {
     self.postMessage({ id, ok: false, error: String(err?.message || err) })
   }
