@@ -121,11 +121,18 @@ export const useStore = create((set) => ({
       }
     })),
 
+  // Size of the model as imported (after the m→mm fix, if applied) — the
+  // "original size" the reset button returns to.
+  importDims: null,
+
   setModel: (name, geometry) => {
     const pieces = [{ id: 1, name, geometry, visible: true }]
     groundAndCenter(pieces)
+    geometry.computeBoundingBox()
+    const sz = geometry.boundingBox.getSize(new THREE.Vector3())
     return set({
       modelName: name,
+      importDims: [sz.x, sz.y, sz.z],
       pieces,
       history: [],
       future: [],
@@ -250,7 +257,12 @@ export const useStore = create((set) => ({
       const m = new THREE.Matrix4()
         .makeTranslation(d[0], d[1], d[2])
         .multiply(new THREE.Matrix4().makeScale(factor, factor, factor))
-      return { pieces: [...s.pieces], ...pushEntry(s, matrixEntry(m)) }
+      return {
+        pieces: [...s.pieces],
+        // The unit fix redefines what "original size" means.
+        importDims: s.importDims ? s.importDims.map((v) => v * factor) : null,
+        ...pushEntry(s, matrixEntry(m))
+      }
     }),
 
   setPiecesBulk: (pieces) =>

@@ -1021,6 +1021,28 @@ export default function App() {
                     />
                     {t('uniform')}
                   </label>
+                  {(() => {
+                    // Reset to the size at import — orientation-invariant:
+                    // dims are matched by size RANK, so a rotated model gets
+                    // its scale back without being distorted across the
+                    // swapped axes. Shown only while the size actually
+                    // differs, on the uncut model.
+                    if (s.pieces.length !== 1 || !s.importDims || !selDims) return null
+                    const cur = [selDims.x, selDims.y, selDims.z]
+                    const sortedCur = [...cur].sort((a, b) => a - b)
+                    const sortedImp = [...s.importDims].sort((a, b) => a - b)
+                    if (sortedCur.every((v, i) => Math.abs(v - sortedImp[i]) <= 0.1)) return null
+                    const f = cur.map((v) => sortedImp[sortedCur.indexOf(v)] / v)
+                    return (
+                      <button onClick={() => s.resizeModel(f[0], f[1], f[2], selectedId)}>
+                        {t('resetSize', {
+                          x: s.importDims[0].toFixed(1),
+                          y: s.importDims[2].toFixed(1),
+                          z: s.importDims[1].toFixed(1)
+                        })}
+                      </button>
+                    )
+                  })()}
                   <label>
                     {t('rotation')}
                     {PRINT_AXES.map(({ key: axis, label, color }) => (

@@ -14,8 +14,9 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
   (auto-grounded after every rotation/resize), right-click menu to re-centre
   or refit the view, per-axis rotation (±15° / ±90°), in-view rotation wheel,
   place-on-face (click a face, the model lies flat on it), resize by target
-  dimensions (proportions locked or per-axis), one-click m→mm fix for
-  metre-unit exports
+  dimensions (proportions locked or per-axis), one-click return to the size
+  at import (orientation-aware — never distorts a rotated model), one-click
+  m→mm fix for metre-unit exports
 - **Per-piece transforms** — click a piece to select it (a lone piece is
   selected automatically): move it across the plate with in-view arrows,
   rotate, resize or place it on a face — the other pieces never budge, and
