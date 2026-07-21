@@ -37,8 +37,12 @@ const PRINT_AXES = [
   { key: 'y', label: 'Z', color: '#2f6bff' }
 ]
 
-// Number field that applies stepper clicks (±1 step) IMMEDIATELY and typed
-// values on Enter/blur — live resize without mid-typing surprises.
+// Number field that applies stepper clicks / ↑↓ arrows IMMEDIATELY and typed
+// values on Enter/blur — live resize without mid-typing surprises. Steppers
+// are told apart from typing by the input event's inputType (typing carries
+// 'insertText' & co, spinner/arrow changes carry none). step="any" keeps the
+// browser from snapping the value to a step grid (with step=1 the first
+// click turned 93.5 into 94.1 — a ±1-delta heuristic never saw it).
 function DimField({ label, color, value, onCommit }) {
   const [text, setText] = useState(String(value))
   useEffect(() => setText(String(value)), [value])
@@ -51,12 +55,12 @@ function DimField({ label, color, value, onCommit }) {
       <input
         type="number"
         min="0.1"
-        step="1"
+        step="any"
         value={text}
         onChange={(e) => {
           setText(e.target.value)
           const v = +e.target.value
-          if (Number.isFinite(v) && Math.abs(Math.abs(v - value) - 1) < 1e-6) commit(v)
+          if (Number.isFinite(v) && !e.nativeEvent.inputType) commit(v)
         }}
         onBlur={(e) => commit(+e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
