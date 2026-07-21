@@ -114,7 +114,11 @@ Key invariants:
   puzzle preview is EDITABLE (puzzleEditMode): drag a marker to move it on
   its plane, click it to remove, click a plane quad to add — all collision-
   guarded in App state; Générer then uses the per-plane manual lists
-  (Array.isArray(manualPins): empty array = deliberately no pins).
+  (Array.isArray(manualPins): empty array = deliberately no pins). Hover
+  affordances in edit mode: connector under cursor lights up (ffe08a,
+  cursor:pointer), otherwise the plane a click would add to brightens
+  (opacity .3, cursor:copy) — _setHoverPin/_setHoverQuad swap shared base/
+  hover materials, cleared on rebuilds.
 - Full undo/redo (⌘Z/⇧⌘Z/Ctrl+Y): `history`/`future` stacks of entries —
   {kind:'snapshot', pieces} for topology changes (cut/simplify/puzzle),
   {kind:'matrix', inverse} for in-place transforms (rotate/resize/scale/

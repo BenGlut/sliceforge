@@ -106,27 +106,58 @@ export class Viewer {
       }
     })
     canvas.addEventListener('pointermove', (e) => {
-      if (!this._dragPin) return
       const rect = canvas.getBoundingClientRect()
       if (!rect.width || !rect.height) return
-      this._raycaster.setFromCamera(
-        new THREE.Vector2(
-          ((e.clientX - rect.left) / rect.width) * 2 - 1,
-          -((e.clientY - rect.top) / rect.height) * 2 + 1
-        ),
-        this.camera
-      )
-      const { pos, quat } = this._dragPin.userData.plane
-      const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(...quat))
-      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
-        normal,
-        new THREE.Vector3(...pos)
-      )
-      const point = new THREE.Vector3()
-      if (this._raycaster.ray.intersectPlane(plane, point)) {
-        this._dragPin.position.copy(point)
-        this._dragMoved = true
+      const setRay = () =>
+        this._raycaster.setFromCamera(
+          new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1
+          ),
+          this.camera
+        )
+      if (this._dragPin) {
+        setRay()
+        const { pos, quat } = this._dragPin.userData.plane
+        const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(...quat))
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+          normal,
+          new THREE.Vector3(...pos)
+        )
+        const point = new THREE.Vector3()
+        if (this._raycaster.ray.intersectPlane(plane, point)) {
+          this._dragPin.position.copy(point)
+          this._dragMoved = true
+        }
+        return
       }
+      // Hover affordances in puzzle-edit mode: light up the connector under
+      // the cursor (click = remove, drag = move) or the plane a click would
+      // add one to.
+      if (!this.puzzleEditMode) {
+        this._clearHover()
+        return
+      }
+      setRay()
+      const pinHit = this._pinPreviewGroup
+        ? this._raycaster.intersectObjects(this._pinPreviewGroup.children, false)[0]
+        : null
+      if (pinHit) {
+        this._setHoverPin(pinHit.object)
+        this._setHoverQuad(null)
+        canvas.style.cursor = 'pointer'
+        return
+      }
+      const quadHit = this._puzzleGroup
+        ? this._raycaster.intersectObjects(this._puzzleGroup.children, false)[0]
+        : null
+      if (quadHit) {
+        this._setHoverPin(null)
+        this._setHoverQuad(quadHit.object)
+        canvas.style.cursor = 'copy'
+        return
+      }
+      this._clearHover()
     })
     // Right-CLICK (not a right-drag pan) opens the context menu.
     this.onContextMenu = null
@@ -479,6 +510,26 @@ export class Viewer {
     this.planeGizmo?.setMode(mode)
   }
 
+  _setHoverPin(mesh) {
+    if (this._hoverPin === mesh) return
+    if (this._hoverPin && this._pinBaseMat) this._hoverPin.material = this._pinBaseMat
+    this._hoverPin = mesh
+    if (mesh && this._pinHoverMat) mesh.material = this._pinHoverMat
+  }
+
+  _setHoverQuad(mesh) {
+    if (this._hoverQuad === mesh) return
+    if (this._hoverQuad && this._quadBaseMat) this._hoverQuad.material = this._quadBaseMat
+    this._hoverQuad = mesh
+    if (mesh && this._quadHoverMat) mesh.material = this._quadHoverMat
+  }
+
+  _clearHover() {
+    this._setHoverPin(null)
+    this._setHoverQuad(null)
+    this.renderer.domElement.style.cursor = ''
+  }
+
   // Orange ghost markers showing where connector reservations will land
   // (world-space poses computed by the same engine as the cut).
   setPinPreview(pins, pinDiameter, pinLength) {
@@ -486,10 +537,13 @@ export class Viewer {
       this._pinPreviewGroup = new THREE.Group()
       this.scene.add(this._pinPreviewGroup)
     }
+    this._clearHover()
     this._pinPreviewGroup.clear()
     if (!pins?.length) return
     const geo = new THREE.CylinderGeometry(pinDiameter / 2, pinDiameter / 2, pinLength, 24)
     const mat = new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.9 })
+    this._pinBaseMat = mat
+    this._pinHoverMat = new THREE.MeshBasicMaterial({ color: 0xffe08a })
     const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0))
     pins.forEach((pin, i) => {
       const m = new THREE.Mesh(geo, mat)
@@ -508,6 +562,7 @@ export class Viewer {
       this._puzzleGroup = new THREE.Group()
       this.scene.add(this._puzzleGroup)
     }
+    this._clearHover()
     this._puzzleGroup.clear()
     if (!planes?.length || !box) return
     const c = box.getCenter(new THREE.Vector3())
@@ -517,6 +572,14 @@ export class Viewer {
       color: 0x2f6bff,
       transparent: true,
       opacity: 0.1,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    })
+    this._quadBaseMat = mat
+    this._quadHoverMat = new THREE.MeshBasicMaterial({
+      color: 0x5b8dee,
+      transparent: true,
+      opacity: 0.3,
       side: THREE.DoubleSide,
       depthWrite: false
     })
