@@ -16,6 +16,11 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
   place-on-face (click a face, the model lies flat on it), resize by target
   dimensions (proportions locked or per-axis), one-click m→mm fix for
   metre-unit exports
+- **Per-piece transforms** — click a piece to select it (a lone piece is
+  selected automatically): move it across the plate with in-view arrows,
+  rotate, resize or place it on a face — the other pieces never budge, and
+  undo reverses just that piece. The toolbar separates transform tools from
+  cutting tools
 - **Plane cut** — axis + offset + two tilt angles, optional kerf (blade clearance)
 - **Puzzle blocks** — slice a (life-size) model into printable blocks of a
   chosen size (e.g. 230 x 230 x 230 mm), with a live preview of every cut
@@ -29,7 +34,7 @@ with matching peg/socket pairs across the seam, ready to drop into any slicer
   planes (collision-guarded: connectors can never run into each other)
 - **Shape cut** — click a protruding detail (a hand, an ear): the smooth
   region grows up to the surrounding creases, then detaches as its own piece
-- **Volume cut** — position/rotate/scale a box in the viewport and detach
+- **Box cut** — position/rotate/scale a box in the viewport and detach
   whatever falls inside it (a hand, a head) as its own piece
 - **Alignment pins** — cylindrical peg/socket pairs auto-placed across the cut
   cross-section (as many as the minimum spacing you set allows), printable

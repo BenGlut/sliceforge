@@ -33,8 +33,8 @@ export class Viewer {
     this.planeHelper = null
     this.modelCenter = new THREE.Vector3()
 
-    // In-view rotation wheel: drag a ring, the whole model rotates live around
-    // its centre; on release the rotation is baked into the geometries.
+    // In-view rotation wheel: drag a ring, the SELECTED piece rotates live
+    // around its centre; on release the rotation is baked into the geometry.
     this.onRotateEnd = null
     this.pivot = new THREE.Object3D()
     this.scene.add(this.pivot)
@@ -45,10 +45,54 @@ export class Viewer {
     this.gizmoHelper = this.gizmo.getHelper()
     this.gizmoHelper.visible = false
     this.scene.add(this.gizmoHelper)
+    this._gizmoTarget = null
+    this._gizmoBasePos = new THREE.Vector3()
     this.gizmo.addEventListener('objectChange', () => this._applyPivotPreview())
     this.gizmo.addEventListener('dragging-changed', (e) => {
       this.controls.enabled = !e.value
+      // Base captured at drag START — the explode slider may have moved the
+      // mesh since the gizmo was attached.
+      if (e.value && this._gizmoTarget) this._gizmoBasePos.copy(this._gizmoTarget.position)
       if (!e.value) this._bakeGizmoRotation()
+    })
+
+    // Move gizmo: plate-plane arrows anchored on the selected piece's centre
+    // (a pivot proxy — the meshes carry their location in the geometry, so
+    // their origin sits at the plate centre). The piece follows the drag
+    // live; the delta is baked into the geometry on release (translatePiece).
+    this.onMoveEnd = null
+    this.movePivot = new THREE.Object3D()
+    this.scene.add(this.movePivot)
+    this._moveTarget = null
+    this.moveGizmo = new TransformControls(this.camera, canvas)
+    this.moveGizmo.setMode('translate')
+    this.moveGizmo.showY = false
+    this.moveGizmo.setSize(0.9)
+    this.moveGizmoHelper = this.moveGizmo.getHelper()
+    this.moveGizmoHelper.visible = false
+    this.scene.add(this.moveGizmoHelper)
+    this._moveBase = new THREE.Vector3()
+    this._movePivotBase = new THREE.Vector3()
+    this.moveGizmo.addEventListener('objectChange', () => {
+      const mesh = this._moveTarget
+      if (!mesh) return
+      mesh.position
+        .copy(this._moveBase)
+        .add(this.movePivot.position)
+        .sub(this._movePivotBase)
+    })
+    this.moveGizmo.addEventListener('dragging-changed', (e) => {
+      this.controls.enabled = !e.value
+      const mesh = this._moveTarget
+      if (!mesh) return
+      if (e.value) {
+        this._moveBase.copy(mesh.position)
+        this._movePivotBase.copy(this.movePivot.position)
+      } else {
+        const d = this.movePivot.position.clone().sub(this._movePivotBase)
+        mesh.position.copy(this._moveBase)
+        if (d.lengthSq() > 1e-6) this.onMoveEnd?.(mesh.userData.pieceId, d.x, d.z)
+      }
     })
 
     this._raf = 0
@@ -246,9 +290,11 @@ export class Viewer {
         if (this.shapeMode) this.onShapePick?.(hit.faceIndex, hit.object.userData.pieceId)
         else if (this.planeMode)
           this.onPlanePick?.(hit.point.clone(), hit.face.normal.clone())
-        else this.onFacePick?.(hit.face.normal.clone())
+        else this.onFacePick?.(hit.face.normal.clone(), hit.object.userData.pieceId)
         return
       }
+      // A click that lands on a gizmo handle must not clear the selection.
+      if (this.gizmo.axis || this.moveGizmo.axis) return
       let best = null
       const target = new THREE.Vector3()
       for (const mesh of this.piecesGroup.children) {
@@ -311,7 +357,9 @@ export class Viewer {
     })
     if (!box.isEmpty()) box.getCenter(this.modelCenter)
     this.setExplode(explode)
-    if (this.gizmoHelper.visible) this.pivot.position.copy(this.modelCenter)
+    // Re-anchor (or drop) the piece gizmos after the pieces changed.
+    if (this.gizmoHelper.visible) this.setGizmo(this.selectedPieceId)
+    if (this.moveGizmoHelper.visible) this.setMoveGizmo(this.selectedPieceId)
 
     if (!box.isEmpty() && refit) this.fitCamera(box)
   }
@@ -444,29 +492,64 @@ export class Viewer {
     return this.volBox.matrix.toArray()
   }
 
-  setGizmo(enabled) {
-    if (enabled && this.piecesGroup.children.length) {
-      this.pivot.position.copy(this.modelCenter)
+  _meshById(pieceId) {
+    return this.piecesGroup.children.find((m) => m.userData.pieceId === pieceId) ?? null
+  }
+
+  // Rotation rings on the given piece (null hides them).
+  setGizmo(pieceId) {
+    const mesh = pieceId != null ? this._meshById(pieceId) : null
+    if (mesh) {
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+      this._gizmoTarget = mesh
+      this._gizmoBasePos.copy(mesh.position)
+      this.pivot.position
+        .copy(mesh.geometry.boundingBox.getCenter(new THREE.Vector3()))
+        .add(mesh.position)
       this.pivot.quaternion.identity()
       this.gizmo.attach(this.pivot)
       this.gizmoHelper.visible = true
     } else {
+      this._gizmoTarget = null
       this.gizmo.detach()
       this.gizmoHelper.visible = false
     }
   }
 
+  // Plate-plane move arrows on the given piece (null hides them).
+  setMoveGizmo(pieceId) {
+    const mesh = pieceId != null ? this._meshById(pieceId) : null
+    if (mesh) {
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+      this._moveTarget = mesh
+      this.movePivot.position
+        .copy(mesh.geometry.boundingBox.getCenter(new THREE.Vector3()))
+        .add(mesh.position)
+      this.moveGizmo.attach(this.movePivot)
+      this.moveGizmoHelper.visible = true
+    } else {
+      this._moveTarget = null
+      this.moveGizmo.detach()
+      this.moveGizmoHelper.visible = false
+    }
+  }
+
   _applyPivotPreview() {
+    const mesh = this._gizmoTarget
+    if (!mesh) return
     const q = this.pivot.quaternion
     const c = this.pivot.position
-    this.piecesGroup.quaternion.copy(q)
-    this.piecesGroup.position.copy(c).sub(c.clone().applyQuaternion(q))
+    mesh.quaternion.copy(q)
+    mesh.position.copy(this._gizmoBasePos).sub(c).applyQuaternion(q).add(c)
   }
 
   _bakeGizmoRotation() {
+    const mesh = this._gizmoTarget
     const q = this.pivot.quaternion.clone()
-    this.piecesGroup.position.set(0, 0, 0)
-    this.piecesGroup.quaternion.identity()
+    if (mesh) {
+      mesh.quaternion.identity()
+      mesh.position.copy(this._gizmoBasePos)
+    }
     this.pivot.quaternion.identity()
     if (q.angleTo(new THREE.Quaternion()) > 1e-4) this.onRotateEnd?.(q)
   }

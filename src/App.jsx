@@ -7,7 +7,7 @@ import { importModelFile, ACCEPTED } from './io/importers.js'
 import { exportSTL, exportOBJ, exportGLB, export3MF } from './io/exporters.js'
 import { AXIS_QUATS } from './geometry/plane.js'
 import { planeCutAsync, simplifyAsync, volumeCutAsync, pinPreviewAsync } from './geometry/cutClient.js'
-import { IconCut, IconBox, IconRotate, IconFaceDown, IconGrid, IconWand, IconLogo } from './icons.jsx'
+import { IconCut, IconBox, IconMove, IconRotate, IconFaceDown, IconGrid, IconWand, IconLogo } from './icons.jsx'
 import { growRegion, regionPositions, regionOrientedBox } from './geometry/shapeSelect.js'
 import { reservationsCollide, pinFits2D } from './geometry/collide.js'
 
@@ -65,14 +65,23 @@ function DimField({ label, color, value, onCommit }) {
   )
 }
 
-const TOOLBAR = [
-  ['plane', <IconCut key="i" />, 'planeCut'],
-  ['volume', <IconBox key="i" />, 'volumeCut'],
-  ['rotate', <IconRotate key="i" />, 'modeRotate'],
-  ['face', <IconFaceDown key="i" />, 'placeFace'],
-  ['shape', <IconWand key="i" />, 'shapeCut'],
-  ['puzzle', <IconGrid key="i" />, 'puzzle']
+// Two families of tools, visually separated in the toolbar: TRANSFORM the
+// selected piece (move/rotate/place) vs CUT it into more pieces.
+const TOOL_GROUPS = [
+  [
+    ['move', <IconMove key="i" />, 'modeMove'],
+    ['rotate', <IconRotate key="i" />, 'modeRotate'],
+    ['face', <IconFaceDown key="i" />, 'placeFace']
+  ],
+  [
+    ['plane', <IconCut key="i" />, 'planeCut'],
+    ['volume', <IconBox key="i" />, 'volumeCut'],
+    ['shape', <IconWand key="i" />, 'shapeCut'],
+    ['puzzle', <IconGrid key="i" />, 'puzzle']
+  ]
 ]
+const TOOLBAR = TOOL_GROUPS.flat()
+const TRANSFORM_TOOLS = new Set(TOOL_GROUPS[0].map(([tool]) => tool))
 
 export default function App() {
   const s = useStore()
@@ -91,6 +100,7 @@ export default function App() {
   const [pinPlacing, setPinPlacing] = useState(false)
   const [manualPins, setManualPins] = useState([])
   const [selectedId, setSelectedId] = useState(null)
+  const selectedIdRef = useRef(null)
   const [blockSize, setBlockSizeState] = useState({ x: 220, y: 220, z: 250 })
   const [busyMsg, setBusyMsg] = useState(null)
   const [pinPreviewOn, setPinPreviewOn] = useState(false)
@@ -218,22 +228,27 @@ export default function App() {
     const canvas = canvasRef.current
     const viewer = canvas.__viewer ?? new Viewer(canvas)
     canvas.__viewer = viewer
-    viewer.onRotateEnd = (q) => useStore.getState().rotateModelQuaternion(q)
-    // CAD selection: clicking a piece selects it and summons the rotation
-    // gizmo; clicking empty space clears both.
+    viewer.onRotateEnd = (q) =>
+      useStore.getState().rotateModelQuaternion(q, selectedIdRef.current)
+    // Baked move: the drag delta from the plate-plane arrows.
+    viewer.onMoveEnd = (pieceId, dx, dz) => useStore.getState().translatePiece(pieceId, dx, dz)
+    // CAD selection: transforms only ever apply to the SELECTED piece (there
+    // can be several on the plate). Clicking a piece selects it and summons
+    // the move arrows; clicking empty space clears both.
     viewer.onPieceClick = (id) => {
       setSelectedId(id)
-      if (id) setActiveTool((tool) => tool ?? 'rotate')
-      else setActiveTool((tool) => (tool === 'rotate' ? null : tool))
+      if (id) setActiveTool((tool) => tool ?? 'move')
+      else setActiveTool((tool) => (TRANSFORM_TOOLS.has(tool) ? null : tool))
     }
-    // Place-on-face (OrcaSlicer-style): rotate the model so the clicked
-    // face lies flat on the grid, then re-ground the grid under it.
-    viewer.onFacePick = (normal) => {
+    // Place-on-face (OrcaSlicer-style): rotate the CLICKED piece so the
+    // face lies flat on the grid, then re-ground it.
+    viewer.onFacePick = (normal, pieceId) => {
+      setSelectedId(pieceId)
       const q = new THREE.Quaternion().setFromUnitVectors(
         normal.normalize(),
         new THREE.Vector3(0, -1, 0)
       )
-      useStore.getState().rotateModelQuaternion(q)
+      useStore.getState().rotateModelQuaternion(q, pieceId)
     }
     viewer.onContextMenu = (x, y) => setCtxMenu({ x, y })
     // Draggable cut plane: gizmo drags write back to the store; clicking the
@@ -334,8 +349,24 @@ export default function App() {
   }, [s.pieces])
 
   useEffect(() => {
-    viewerRef.current?.setGizmo(activeTool === 'rotate' && s.pieces.length > 0)
-  }, [activeTool, s.pieces])
+    selectedIdRef.current = selectedId
+  }, [selectedId])
+
+  // A lone piece is always the implicit selection (no pointless extra click);
+  // a selection whose piece vanished (cut, undo) is cleared.
+  useEffect(() => {
+    if (s.pieces.length === 1) setSelectedId(s.pieces[0].id)
+    else if (selectedId != null && !s.pieces.some((p) => p.id === selectedId))
+      setSelectedId(null)
+  }, [s.pieces, selectedId])
+
+  useEffect(() => {
+    viewerRef.current?.setGizmo(activeTool === 'rotate' ? selectedId : null)
+  }, [activeTool, selectedId, s.pieces])
+
+  useEffect(() => {
+    viewerRef.current?.setMoveGizmo(activeTool === 'move' ? selectedId : null)
+  }, [activeTool, selectedId, s.pieces])
 
   useEffect(() => {
     viewerRef.current?.setVolumeBox(activeTool === 'volume' && s.pieces.length > 0)
@@ -511,7 +542,10 @@ export default function App() {
       setPinPlacing(false)
       setManualPins([])
     }
-    setModelOpen(!activeTool)
+    // The Modèle section IS the transform editor (dimensions + rotation):
+    // it stays open alongside the transform tools and collapses only for the
+    // cut tools, which bring their own sections.
+    setModelOpen(!activeTool || TRANSFORM_TOOLS.has(activeTool))
     // Opening the puzzle on a model smaller than the default blocks would
     // yield "1 block" and feel broken — propose sizes that actually split.
     if (activeTool === 'puzzle' && dims) {
@@ -796,6 +830,12 @@ export default function App() {
     if (box.isEmpty()) return { modelBox: null, dims: null }
     return { modelBox: box, dims: box.getSize(new THREE.Vector3()) }
   })()
+  const selPiece = s.pieces.find((p) => p.id === selectedId) ?? null
+  const selDims = (() => {
+    if (!selPiece) return null
+    if (!selPiece.geometry.boundingBox) selPiece.geometry.computeBoundingBox()
+    return selPiece.geometry.boundingBox.getSize(new THREE.Vector3())
+  })()
   const isTiny = dims && Math.max(dims.x, dims.y, dims.z) < 10
   const maxDim = dims ? Math.max(dims.x, dims.y, dims.z) : 100
   const effRadius = shapeRadius ?? Math.round(maxDim / 4)
@@ -858,15 +898,19 @@ export default function App() {
           <canvas ref={canvasRef} />
           {s.pieces.length > 0 && (
             <div className="viewport-toolbar">
-              {TOOLBAR.map(([tool, icon, labelKey], i) => (
-                <button
-                  key={tool}
-                  className={activeTool === tool ? 'active' : ''}
-                  onClick={() => setActiveTool(activeTool === tool ? null : tool)}
-                >
-                  {icon} <span className="tool-label">{t(labelKey)}</span>
-                  <span className="kbd">{i + 1}</span>
-                </button>
+              {TOOL_GROUPS.map((group, gi) => (
+                <div className="tool-group" key={gi}>
+                  {group.map(([tool, icon, labelKey]) => (
+                    <button
+                      key={tool}
+                      className={activeTool === tool ? 'active' : ''}
+                      onClick={() => setActiveTool(activeTool === tool ? null : tool)}
+                    >
+                      {icon} <span className="tool-label">{t(labelKey)}</span>
+                      <span className="kbd">{TOOLBAR.findIndex(([tl]) => tl === tool) + 1}</span>
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           )}
@@ -935,38 +979,61 @@ export default function App() {
                 </div>
               )}
               {modelOpen && (<>
-              <label>
-                {t('dimensions')}
-                <div className="dim-row">
-                  {PRINT_AXES.map(({ key, label, color }) => (
-                    <DimField
-                      key={key}
-                      label={label}
-                      color={color}
-                      value={dims ? +dims[key].toFixed(1) : 0}
-                      onCommit={(v) => {
-                        if (!dims) return
-                        const f = v / dims[key]
-                        if (uniformScale) s.resizeModel(f, f, f)
-                        else
-                          s.resizeModel(
-                            key === 'x' ? f : 1,
-                            key === 'y' ? f : 1,
-                            key === 'z' ? f : 1
-                          )
-                      }}
+              {selPiece ? (
+                <>
+                  {s.pieces.length > 1 && (
+                    <div className="dims">{t('selectedPiece', { name: selPiece.name })}</div>
+                  )}
+                  <label>
+                    {t('dimensions')}
+                    <div className="dim-row">
+                      {PRINT_AXES.map(({ key, label, color }) => (
+                        <DimField
+                          key={key}
+                          label={label}
+                          color={color}
+                          value={selDims ? +selDims[key].toFixed(1) : 0}
+                          onCommit={(v) => {
+                            if (!selDims) return
+                            const f = v / selDims[key]
+                            if (uniformScale) s.resizeModel(f, f, f, selectedId)
+                            else
+                              s.resizeModel(
+                                key === 'x' ? f : 1,
+                                key === 'y' ? f : 1,
+                                key === 'z' ? f : 1,
+                                selectedId
+                              )
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </label>
+                  <label className="inline">
+                    <input
+                      type="checkbox"
+                      checked={uniformScale}
+                      onChange={(e) => setUniformScale(e.target.checked)}
                     />
-                  ))}
-                </div>
-              </label>
-              <label className="inline">
-                <input
-                  type="checkbox"
-                  checked={uniformScale}
-                  onChange={(e) => setUniformScale(e.target.checked)}
-                />
-                {t('uniform')}
-              </label>
+                    {t('uniform')}
+                  </label>
+                  <label>
+                    {t('rotation')}
+                    {PRINT_AXES.map(({ key: axis, label, color }) => (
+                      <div className="rot-row" key={axis}>
+                        <span className="rot-axis" style={{ color }}>{label}</span>
+                        {[-90, -15, 15, 90].map((deg) => (
+                          <button key={deg} onClick={() => s.rotateModel(axis, deg, selectedId)}>
+                            {deg > 0 ? `+${deg}°` : `${deg}°`}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </label>
+                </>
+              ) : (
+                <div className="dims">{t('selectHint')}</div>
+              )}
               <div className="dims">{t('triangles', { n: Math.round(triCount).toLocaleString() })}</div>
               <div className="simplify-row">
                 <input
@@ -982,19 +1049,6 @@ export default function App() {
                   {t('simplify')}
                 </button>
               </div>
-              <label>
-                {t('rotation')}
-                {PRINT_AXES.map(({ key: axis, label, color }) => (
-                  <div className="rot-row" key={axis}>
-                    <span className="rot-axis" style={{ color }}>{label}</span>
-                    {[-90, -15, 15, 90].map((deg) => (
-                      <button key={deg} onClick={() => s.rotateModel(axis, deg)}>
-                        {deg > 0 ? `+${deg}°` : `${deg}°`}
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </label>
               </>)}
             </section>
 
@@ -1152,9 +1206,17 @@ export default function App() {
             </>
             )}
 
+            {activeTool === 'move' && (
+              <section>
+                <h3>{t('modeMove')}</h3>
+                <div className="dims">{selectedId ? t('moveHint') : t('selectHint')}</div>
+              </section>
+            )}
+
             {activeTool === 'volume' && (
               <section>
                 <h3>{t('volumeCut')}</h3>
+                <div className="dims">{t('volumeHint')}</div>
                 <div className="axis-row">
                   {[
                     ['translate', t('modeMove')],
@@ -1186,7 +1248,7 @@ export default function App() {
             {activeTool === 'rotate' && (
               <section>
                 <h3>{t('modeRotate')}</h3>
-                <div className="dims">{t('rotateHint')}</div>
+                <div className="dims">{selectedId ? t('rotateHint') : t('selectHint')}</div>
               </section>
             )}
 
@@ -1377,7 +1439,7 @@ export default function App() {
                       className="piece-name"
                       onClick={() => {
                         setSelectedId(p.id)
-                        setActiveTool((tool) => tool ?? 'rotate')
+                        setActiveTool((tool) => tool ?? 'move')
                       }}
                     >
                       {p.name}

@@ -93,10 +93,25 @@ Key invariants:
   opens, reopenable by click.
 - **Icons**: inline SVG components in `src/icons.jsx` (stroke, currentColor).
   NO emoji anywhere in the UI.
-- **Tool-based UI (CAD standard)**: plane helper, volume box and rotation
-  rings are TOOLS in the viewport toolbar — exactly one active at a time,
-  nothing shown by default, Esc leaves the tool, each tool brings its own
-  sidebar sections. Never add an always-visible overlay to the scene.
+- **Tool-based UI (CAD standard)**: plane helper, volume box, move arrows and
+  rotation rings are TOOLS in the viewport toolbar — exactly one active at a
+  time, nothing shown by default, Esc leaves the tool, each tool brings its
+  own sidebar sections. Never add an always-visible overlay to the scene.
+  The toolbar is TWO GROUPS split by a rule: transform tools (move / rotate /
+  place-on-face) then cut tools (plane / box / shape / puzzle).
+- **Selection-gated transforms**: move, rotate, resize and place-on-face act
+  on the SELECTED piece only — there can be several pieces on the plate.
+  Store transforms take an optional piece id (`rotateModel(axis, deg, id)`,
+  `resizeModel(fx,fy,fz,id)`, `rotateModelQuaternion(q,id)`,
+  `translatePiece(id,dx,dz)`); matrix history entries carry `ids` so undo
+  only reverses the affected piece. Partial transforms re-ground y ONLY
+  (`groundY`) — full x/z recentring happens only when the transform covered
+  every piece. A lone piece is the implicit selection (auto-selected, no
+  extra click); selecting a piece auto-opens the Move tool; both gizmos
+  anchor on a pivot proxy at the piece's bbox centre (mesh origins sit at the
+  plate centre — never attach TransformControls to the mesh directly). The
+  Modèle sidebar section is the transform editor: it stays open with
+  transform tools and collapses only for cut tools.
 - Geometry transforms (rotate/resize) are **baked into the BufferGeometry**;
   meshes/groups stay at identity except during gizmo preview and explode.
 - All booleans go through Manifold; **weld with `mesh.merge()` in WASM**, never

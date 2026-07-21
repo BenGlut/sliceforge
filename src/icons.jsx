@@ -28,6 +28,17 @@ export const IconBox = () => (
   </svg>
 )
 
+export const IconMove = () => (
+  <svg {...base}>
+    <line x1="12" y1="3.5" x2="12" y2="20.5" />
+    <line x1="3.5" y1="12" x2="20.5" y2="12" />
+    <polyline points="9.2 6 12 3.2 14.8 6" />
+    <polyline points="9.2 18 12 20.8 14.8 18" />
+    <polyline points="6 9.2 3.2 12 6 14.8" />
+    <polyline points="18 9.2 20.8 12 18 14.8" />
+  </svg>
+)
+
 export const IconRotate = () => (
   <svg {...base}>
     <path d="M21 12a9 9 0 1 1-2.9-6.6" />

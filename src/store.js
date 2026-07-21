@@ -29,18 +29,33 @@ function groundAndCenter(pieces) {
   return [dx, dy, dz]
 }
 
-// Apply a model-level transform (about the model centre, then re-grounded)
-// and return the TOTAL affine matrix — undo is its exact inverse, no
-// geometry snapshots needed.
-function transformPieces(pieces, makeM) {
-  const c = modelCenter(pieces)
+// Re-seat pieces on the plate (y only) without touching x/z — used when a
+// transform covered only SOME of the pieces: the others must not shift.
+function groundY(pieces) {
+  const box = new THREE.Box3()
+  for (const p of pieces) {
+    if (!p.geometry.boundingBox) p.geometry.computeBoundingBox()
+    box.union(p.geometry.boundingBox)
+  }
+  const dy = -box.min.y
+  if (Math.abs(dy) < 1e-4) return [0, 0, 0]
+  for (const p of pieces) p.geometry.translate(0, dy, 0)
+  return [0, dy, 0]
+}
+
+// Apply a transform to the TARGET pieces (about their own centre, then
+// re-grounded) and return the TOTAL affine matrix — undo is its exact
+// inverse, no geometry snapshots needed. Full x/z recentring only happens
+// when the transform covered every piece (single-model behaviour unchanged).
+function transformPieces(targets, makeM, all = targets) {
+  const c = modelCenter(targets)
   const m = new THREE.Matrix4()
     .makeTranslation(c.x, c.y, c.z)
     .multiply(makeM())
     .multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z))
   // applyMatrix4 refreshes an already-computed boundingBox itself.
-  for (const p of pieces) p.geometry.applyMatrix4(m)
-  const d = groundAndCenter(pieces)
+  for (const p of targets) p.geometry.applyMatrix4(m)
+  const d = targets.length === all.length ? groundAndCenter(targets) : groundY(targets)
   return new THREE.Matrix4().makeTranslation(d[0], d[1], d[2]).multiply(m)
 }
 
@@ -51,8 +66,9 @@ const HISTORY_MAX = 30
 function pushEntry(s, entry) {
   return { history: [...s.history, entry].slice(-HISTORY_MAX), future: [] }
 }
-function matrixEntry(total) {
-  return { kind: 'matrix', inverse: total.clone().invert().toArray() }
+// ids: piece ids the matrix applies to on undo/redo — null means all pieces.
+function matrixEntry(total, ids = null) {
+  return { kind: 'matrix', inverse: total.clone().invert().toArray(), ids }
 }
 
 export const CONNECTOR_PRESETS = {
@@ -142,11 +158,12 @@ export const useStore = create((set) => ({
       const entry = history.pop()
       if (entry.kind === 'matrix') {
         const inv = new THREE.Matrix4().fromArray(entry.inverse)
-        for (const p of s.pieces) p.geometry.applyMatrix4(inv)
+        const targets = entry.ids ? s.pieces.filter((p) => entry.ids.includes(p.id)) : s.pieces
+        for (const p of targets) p.geometry.applyMatrix4(inv)
         return {
           pieces: [...s.pieces],
           history,
-          future: [...s.future, matrixEntry(inv)]
+          future: [...s.future, matrixEntry(inv, entry.ids)]
         }
       }
       return {
@@ -163,11 +180,12 @@ export const useStore = create((set) => ({
       const entry = future.pop()
       if (entry.kind === 'matrix') {
         const inv = new THREE.Matrix4().fromArray(entry.inverse)
-        for (const p of s.pieces) p.geometry.applyMatrix4(inv)
+        const targets = entry.ids ? s.pieces.filter((p) => entry.ids.includes(p.id)) : s.pieces
+        for (const p of targets) p.geometry.applyMatrix4(inv)
         return {
           pieces: [...s.pieces],
           future,
-          history: [...s.history, matrixEntry(inv)].slice(-HISTORY_MAX)
+          history: [...s.history, matrixEntry(inv, entry.ids)].slice(-HISTORY_MAX)
         }
       }
       return {
@@ -177,25 +195,50 @@ export const useStore = create((set) => ({
       }
     }),
 
-  rotateModelQuaternion: (q) =>
+  // Transforms act on ONE piece when an id is given (selection-gated UI),
+  // on the whole plate when omitted.
+  rotateModelQuaternion: (q, id = null) =>
     set((s) => {
-      const m = transformPieces(s.pieces, () => new THREE.Matrix4().makeRotationFromQuaternion(q))
-      return { pieces: [...s.pieces], ...pushEntry(s, matrixEntry(m)) }
-    }),
-
-  rotateModel: (axis, deg) =>
-    set((s) => {
-      const rad = THREE.MathUtils.degToRad(deg)
-      const m = transformPieces(s.pieces, () =>
-        new THREE.Matrix4()[`makeRotation${axis.toUpperCase()}`](rad)
+      const targets = id ? s.pieces.filter((p) => p.id === id) : s.pieces
+      if (!targets.length) return {}
+      const m = transformPieces(
+        targets,
+        () => new THREE.Matrix4().makeRotationFromQuaternion(q),
+        s.pieces
       )
-      return { pieces: [...s.pieces], ...pushEntry(s, matrixEntry(m)) }
+      return { pieces: [...s.pieces], ...pushEntry(s, matrixEntry(m, id ? [id] : null)) }
     }),
 
-  resizeModel: (fx, fy, fz) =>
+  rotateModel: (axis, deg, id = null) =>
     set((s) => {
-      const m = transformPieces(s.pieces, () => new THREE.Matrix4().makeScale(fx, fy, fz))
-      return { pieces: [...s.pieces], ...pushEntry(s, matrixEntry(m)) }
+      const targets = id ? s.pieces.filter((p) => p.id === id) : s.pieces
+      if (!targets.length) return {}
+      const rad = THREE.MathUtils.degToRad(deg)
+      const m = transformPieces(
+        targets,
+        () => new THREE.Matrix4()[`makeRotation${axis.toUpperCase()}`](rad),
+        s.pieces
+      )
+      return { pieces: [...s.pieces], ...pushEntry(s, matrixEntry(m, id ? [id] : null)) }
+    }),
+
+  resizeModel: (fx, fy, fz, id = null) =>
+    set((s) => {
+      const targets = id ? s.pieces.filter((p) => p.id === id) : s.pieces
+      if (!targets.length) return {}
+      const m = transformPieces(targets, () => new THREE.Matrix4().makeScale(fx, fy, fz), s.pieces)
+      return { pieces: [...s.pieces], ...pushEntry(s, matrixEntry(m, id ? [id] : null)) }
+    }),
+
+  // Slide one piece across the plate (move gizmo bake) — y never changes,
+  // the piece keeps resting on the plate.
+  translatePiece: (id, dx, dz) =>
+    set((s) => {
+      const piece = s.pieces.find((p) => p.id === id)
+      if (!piece || (Math.abs(dx) < 1e-4 && Math.abs(dz) < 1e-4)) return {}
+      piece.geometry.translate(dx, 0, dz)
+      const m = new THREE.Matrix4().makeTranslation(dx, 0, dz)
+      return { pieces: [...s.pieces], ...pushEntry(s, matrixEntry(m, [id])) }
     }),
 
   scaleModel: (factor) =>

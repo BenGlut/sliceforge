@@ -85,6 +85,12 @@ button.lang:hover { color: var(--text); background: var(--field); }
   position: absolute; top: 16px; left: 16px;
   display: flex; flex-direction: column; gap: 6px;
 }
+.viewport-toolbar .tool-group { display: flex; flex-direction: column; gap: 6px; }
+/* Transform tools above, cut tools below — a thin rule marks the family split. */
+.viewport-toolbar .tool-group + .tool-group {
+  margin-top: 4px; padding-top: 10px;
+  border-top: 1px solid var(--border-strong);
+}
 .viewport-toolbar button {
   position: relative;
   width: 44px; height: 44px; padding: 0;
