@@ -117,6 +117,13 @@ Key invariants:
 - All booleans go through Manifold; **weld with `mesh.merge()` in WASM**, never
   three's `mergeVertices` (JS hash map blows up ~1M verts — learned on a real
   189 MB STL).
+- **Place-on-face hover**: in face mode the facet under the cursor lights up
+  (ffe08a overlay) BEFORE the click — `coplanarRegion` (seed-normal
+  comparison, 12°, so curvature can't drift it wide) unioned with a small
+  geodesic halo (5% of the piece) so curved zones still show feedback.
+  Membership-keyed cache (no recompute while sliding on the same face);
+  `warmFaceCaches()` runs at tool activation because the cold
+  adjacency build on 80k tris costs ~700 ms and must not land mid-hover.
 - Display normals come from `niceNormals` (normals.js): toCreasedNormals at
   30° under 500k tris (flat cut faces stay flat next to smooth surfaces),
   smooth fallback above. NEVER plain computeVertexNormals on cut results.

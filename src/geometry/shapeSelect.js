@@ -147,6 +147,38 @@ export function growRegion(geometry, seedTri, angleDeg, radius = Infinity) {
   return { sel, count, triCount }
 }
 
+/**
+ * Connected region whose triangles stay nearly coplanar with the SEED
+ * triangle (each candidate is compared to the seed normal, not to its
+ * neighbour — gentle curvature cannot drift the selection wide). Used to
+ * light up "the face" under the cursor in place-on-face mode.
+ */
+export function coplanarRegion(geometry, seedTri, angleDeg = 12) {
+  const { neighbors, triCount } = adjacency(geometry)
+  const normals = triNormals(geometry)
+  const cosT = Math.cos((angleDeg * Math.PI) / 180)
+  const sx = normals[seedTri * 3]
+  const sy = normals[seedTri * 3 + 1]
+  const sz = normals[seedTri * 3 + 2]
+  const sel = new Uint8Array(triCount)
+  const queue = [seedTri]
+  sel[seedTri] = 1
+  let count = 1
+  while (queue.length) {
+    const t = queue.pop()
+    for (let e = 0; e < 3; e++) {
+      const nb = neighbors[t * 3 + e]
+      if (nb < 0 || sel[nb]) continue
+      if (sx * normals[nb * 3] + sy * normals[nb * 3 + 1] + sz * normals[nb * 3 + 2] < cosT)
+        continue
+      sel[nb] = 1
+      count++
+      queue.push(nb)
+    }
+  }
+  return { sel, count, triCount }
+}
+
 export function regionPositions(geometry, sel, count) {
   const pos = geometry.attributes.position.array
   const idx = geometry.index?.array ?? null

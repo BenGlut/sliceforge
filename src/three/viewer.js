@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { TransformControls } from 'three/addons/controls/TransformControls.js'
 import { AXIS_QUATS } from '../geometry/plane.js'
+import { coplanarRegion, growRegion, regionPositions } from '../geometry/shapeSelect.js'
 
 export const PIECE_COLORS = [0x5b8dee, 0xee8a5b, 0x62c48a, 0xd46bc8, 0xe0c34f, 0x6bd4cf, 0x9a7be4]
 
@@ -190,6 +191,19 @@ export class Viewer {
         }
         return
       }
+      // Place-on-face hover: light up the facet under the cursor so the user
+      // sees WHICH face will land on the plate before clicking.
+      if (this.faceMode) {
+        setRay()
+        const hit = this._raycaster.intersectObjects(
+          this.piecesGroup.children.filter((m) => m.visible),
+          false
+        )[0]
+        if (hit?.face) this._setFaceHover(hit.object, hit.faceIndex)
+        else this._setFaceHover(null)
+        return
+      }
+      if (this._faceHoverKey) this._setFaceHover(null)
       // Hover affordances in puzzle-edit mode: light up the connector under
       // the cursor (click = remove, drag = move) or the plane a click would
       // add one to.
@@ -357,9 +371,11 @@ export class Viewer {
     })
     if (!box.isEmpty()) box.getCenter(this.modelCenter)
     this.setExplode(explode)
-    // Re-anchor (or drop) the piece gizmos after the pieces changed.
+    // Re-anchor (or drop) the piece gizmos after the pieces changed; the
+    // hovered-face overlay is stale against the new geometry.
     if (this.gizmoHelper.visible) this.setGizmo(this.selectedPieceId)
     if (this.moveGizmoHelper.visible) this.setMoveGizmo(this.selectedPieceId)
+    this._setFaceHover(null)
 
     if (!box.isEmpty() && refit) this.fitCamera(box)
   }
@@ -606,6 +622,90 @@ export class Viewer {
 
   setPlaneGizmoMode(mode) {
     this.planeGizmo?.setMode(mode)
+  }
+
+  // Highlight overlay for the hovered facet in place-on-face mode. Keyed by
+  // (piece, region membership) so sliding the cursor across the same flat
+  // face never recomputes the flood fill.
+  _setFaceHover(mesh, faceIndex = -1) {
+    if (!mesh) {
+      if (!this._faceHoverKey) return
+      this._faceHoverKey = ''
+      this._faceHoverSel = null
+      if (this._faceHoverMesh) {
+        this.scene.remove(this._faceHoverMesh)
+        this._faceHoverMesh.geometry.dispose()
+        this._faceHoverMesh = null
+      }
+      return
+    }
+    const pieceKey = String(mesh.userData.pieceId)
+    if (
+      this._faceHoverKey === pieceKey &&
+      this._faceHoverSel &&
+      this._faceHoverSel.sel[faceIndex]
+    )
+      return
+    // The exact coplanar face, floored by a small geodesic patch around the
+    // cursor: flat faces light up whole, curved zones still show a visible
+    // halo where the piece would tip onto the plate.
+    const flat = coplanarRegion(mesh.geometry, faceIndex)
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+    const bbSize = mesh.geometry.boundingBox.getSize(new THREE.Vector3())
+    const halo = growRegion(
+      mesh.geometry,
+      faceIndex,
+      60,
+      0.05 * Math.max(bbSize.x, bbSize.y, bbSize.z)
+    )
+    const sel = flat.sel
+    let count = flat.count
+    for (let t = 0; t < sel.length; t++) {
+      if (halo.sel[t] && !sel[t]) {
+        sel[t] = 1
+        count++
+      }
+    }
+    if (this._faceHoverMesh) {
+      this.scene.remove(this._faceHoverMesh)
+      this._faceHoverMesh.geometry.dispose()
+      this._faceHoverMesh = null
+    }
+    this._faceHoverKey = pieceKey
+    this._faceHoverSel = { sel }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute(
+      'position',
+      new THREE.BufferAttribute(regionPositions(mesh.geometry, sel, count), 3)
+    )
+    if (!this._faceHoverMat)
+      this._faceHoverMat = new THREE.MeshBasicMaterial({
+        color: 0xffe08a,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -2
+      })
+    this._faceHoverMesh = new THREE.Mesh(g, this._faceHoverMat)
+    this._faceHoverMesh.position.copy(mesh.position)
+    this.scene.add(this._faceHoverMesh)
+  }
+
+  clearFaceHover() {
+    this._setFaceHover(null)
+  }
+
+  // Build the adjacency / normals / centroids caches ahead of the first
+  // hover — on an 80k-tri mesh the cold build costs ~700 ms, which must land
+  // at tool activation, not as a freeze mid-mouse-move.
+  warmFaceCaches() {
+    for (const m of this.piecesGroup.children) {
+      if (!m.visible) continue
+      const g = m.geometry
+      if (g.userData._adj && g.userData._triNormals && g.userData._triCentroids) continue
+      growRegion(g, 0, 0.1, 0.001)
+    }
   }
 
   _setHoverPin(mesh) {

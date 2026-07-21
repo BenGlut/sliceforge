@@ -380,6 +380,10 @@ export default function App() {
     if (!viewerRef.current) return
     viewerRef.current.faceMode = activeTool === 'face'
     viewerRef.current.shapeMode = activeTool === 'shape'
+    if (activeTool !== 'face') viewerRef.current.clearFaceHover?.()
+    // Warm the face-hover caches right after the tool opens (off the click
+    // paint) so the first hover never freezes.
+    if (activeTool === 'face') setTimeout(() => viewerRef.current?.warmFaceCaches?.(), 30)
     if (activeTool !== 'shape') clearShapeSel()
   }, [activeTool])
 
