@@ -57,6 +57,12 @@ Key invariants:
   model-level transform — a model must never float or sit off-plate. Cuts
   don't move pieces. Right-click in the viewport = context menu (centre
   model / fit view); right-drag stays orbit-pan.
+- **Print-axis labels**: everywhere the user reads dimensions (Dimensions
+  editor, Taille line, puzzle block sizes, Rotation rows) axes are shown in
+  PRINT convention with slicer colors — X red width, Y green depth, Z blue
+  HEIGHT — via PRINT_AXES (App.jsx): print-Z = view-y, print-Y = view-z.
+  DimField commits stepper clicks (±1 step) immediately and typed values on
+  Enter/blur.
 - **Up-axis convention**: printing formats (STL/OBJ/3MF) are Z-up, the
   viewer is Y-up. importers.js rotates -90° X on import; exporters rotate a
   COPY back (+90° X, `toZUpGeometry`) for STL/OBJ/3MF so slicers open parts

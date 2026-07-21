@@ -28,6 +28,43 @@ function puzzlePlanes(box, blockSize) {
   return planes
 }
 
+// Print-convention axes everywhere the user reads dimensions: X = width,
+// Y = depth, Z = HEIGHT (slicer convention). The viewer is Y-up internally,
+// so print-Z maps to view-y and print-Y to view-z.
+const PRINT_AXES = [
+  { key: 'x', label: 'X', color: '#e5484d' },
+  { key: 'z', label: 'Y', color: '#3fb950' },
+  { key: 'y', label: 'Z', color: '#2f6bff' }
+]
+
+// Number field that applies stepper clicks (±1 step) IMMEDIATELY and typed
+// values on Enter/blur — live resize without mid-typing surprises.
+function DimField({ label, color, value, onCommit }) {
+  const [text, setText] = useState(String(value))
+  useEffect(() => setText(String(value)), [value])
+  const commit = (v) => {
+    if (v > 0 && Math.abs(v - value) > 1e-3) onCommit(v)
+  }
+  return (
+    <div className="dim-field">
+      <span style={{ color }}>{label}</span>
+      <input
+        type="number"
+        min="0.1"
+        step="1"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value)
+          const v = +e.target.value
+          if (Number.isFinite(v) && Math.abs(Math.abs(v - value) - 1) < 1e-6) commit(v)
+        }}
+        onBlur={(e) => commit(+e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+      />
+    </div>
+  )
+}
+
 const TOOLBAR = [
   ['plane', <IconCut key="i" />, 'planeCut'],
   ['volume', <IconBox key="i" />, 'volumeCut'],
@@ -848,8 +885,8 @@ export default function App() {
                 <div className="dims">
                   {t('dims', {
                     x: dims.x.toFixed(1),
-                    y: dims.y.toFixed(1),
-                    z: dims.z.toFixed(1)
+                    y: dims.z.toFixed(1),
+                    z: dims.y.toFixed(1)
                   })}
                 </div>
               )}
@@ -862,27 +899,23 @@ export default function App() {
               <label>
                 {t('dimensions')}
                 <div className="dim-row">
-                  {['x', 'y', 'z'].map((axis) => (
-                    <input
-                      key={axis + dims?.[axis]?.toFixed(2)}
-                      type="number"
-                      min="0.1"
-                      step="1"
-                      defaultValue={dims ? +dims[axis].toFixed(1) : 0}
-                      aria-label={axis.toUpperCase()}
-                      onBlur={(e) => {
-                        const v = +e.target.value
-                        if (!dims || !(v > 0) || Math.abs(v - dims[axis]) < 1e-3) return
-                        const f = v / dims[axis]
+                  {PRINT_AXES.map(({ key, label, color }) => (
+                    <DimField
+                      key={key}
+                      label={label}
+                      color={color}
+                      value={dims ? +dims[key].toFixed(1) : 0}
+                      onCommit={(v) => {
+                        if (!dims) return
+                        const f = v / dims[key]
                         if (uniformScale) s.resizeModel(f, f, f)
                         else
                           s.resizeModel(
-                            axis === 'x' ? f : 1,
-                            axis === 'y' ? f : 1,
-                            axis === 'z' ? f : 1
+                            key === 'x' ? f : 1,
+                            key === 'y' ? f : 1,
+                            key === 'z' ? f : 1
                           )
                       }}
-                      onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
                     />
                   ))}
                 </div>
@@ -912,9 +945,9 @@ export default function App() {
               </div>
               <label>
                 {t('rotation')}
-                {['x', 'y', 'z'].map((axis) => (
+                {PRINT_AXES.map(({ key: axis, label, color }) => (
                   <div className="rot-row" key={axis}>
-                    <span className="rot-axis">{axis.toUpperCase()}</span>
+                    <span className="rot-axis" style={{ color }}>{label}</span>
                     {[-90, -15, 15, 90].map((deg) => (
                       <button key={deg} onClick={() => s.rotateModel(axis, deg)}>
                         {deg > 0 ? `+${deg}°` : `${deg}°`}
@@ -1144,18 +1177,19 @@ export default function App() {
                 <label>
                   {t('blockSize')}
                   <div className="dim-row">
-                    {['x', 'y', 'z'].map((axis) => (
-                      <input
-                        key={axis}
-                        type="number"
-                        min="10"
-                        step="10"
-                        value={blockSize[axis]}
-                        aria-label={axis.toUpperCase()}
-                        onChange={(e) =>
-                          setBlockSizeState({ ...blockSize, [axis]: +e.target.value })
-                        }
-                      />
+                    {PRINT_AXES.map(({ key: axis, label, color }) => (
+                      <div className="dim-field" key={axis}>
+                        <span style={{ color }}>{label}</span>
+                        <input
+                          type="number"
+                          min="10"
+                          step="10"
+                          value={blockSize[axis]}
+                          onChange={(e) =>
+                            setBlockSizeState({ ...blockSize, [axis]: +e.target.value })
+                          }
+                        />
+                      </div>
                     ))}
                   </div>
                 </label>
