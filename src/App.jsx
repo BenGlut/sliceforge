@@ -1218,10 +1218,10 @@ export default function App() {
                     {t('connector')}
                     <div className="axis-row">
                       {[
+                        ['dowel', t('connDowel')],
                         ['pin', t('connPin')],
                         ['square', t('connSquare')],
-                        ['hex', t('connHex')],
-                        ['dowel', t('connDowel')]
+                        ['hex', t('connHex')]
                       ].map(([type, label]) => (
                         <button
                           key={type}
@@ -1358,10 +1358,10 @@ export default function App() {
                   {t('connector')}
                   <div className="axis-row">
                     {[
+                      ['dowel', t('connDowel')],
                       ['pin', t('connPin')],
                       ['square', t('connSquare')],
-                      ['hex', t('connHex')],
-                      ['dowel', t('connDowel')]
+                      ['hex', t('connHex')]
                     ].map(([type, label]) => (
                       <button
                         key={type}
