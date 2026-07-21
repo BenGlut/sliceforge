@@ -39,6 +39,13 @@ export const IconMove = () => (
   </svg>
 )
 
+export const IconReset = () => (
+  <svg {...base}>
+    <path d="M3 12a9 9 0 1 0 2.9-6.6" />
+    <polyline points="3 2.5 3 8.5 9 8.5" />
+  </svg>
+)
+
 export const IconRotate = () => (
   <svg {...base}>
     <path d="M21 12a9 9 0 1 1-2.9-6.6" />

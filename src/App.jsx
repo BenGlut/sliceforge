@@ -7,7 +7,7 @@ import { importModelFile, ACCEPTED } from './io/importers.js'
 import { exportSTL, exportOBJ, exportGLB, export3MF } from './io/exporters.js'
 import { AXIS_QUATS } from './geometry/plane.js'
 import { planeCutAsync, simplifyAsync, volumeCutAsync, pinPreviewAsync } from './geometry/cutClient.js'
-import { IconCut, IconBox, IconMove, IconRotate, IconFaceDown, IconGrid, IconWand, IconLogo } from './icons.jsx'
+import { IconCut, IconBox, IconMove, IconReset, IconRotate, IconFaceDown, IconGrid, IconWand, IconLogo } from './icons.jsx'
 import { growRegion, regionPositions, regionOrientedBox } from './geometry/shapeSelect.js'
 import { reservationsCollide, pinFits2D } from './geometry/collide.js'
 
@@ -988,8 +988,37 @@ export default function App() {
                   {s.pieces.length > 1 && (
                     <div className="dims">{t('selectedPiece', { name: selPiece.name })}</div>
                   )}
-                  <label>
-                    {t('dimensions')}
+                  <div className="field">
+                    <div className="field-head">
+                      {t('dimensions')}
+                      {(() => {
+                        // Reset to the size at import — orientation-invariant:
+                        // dims are matched by size RANK, so a rotated model
+                        // gets its scale back without being distorted across
+                        // the swapped axes. Shown only while the size actually
+                        // differs, on the uncut model.
+                        if (s.pieces.length !== 1 || !s.importDims || !selDims) return null
+                        const cur = [selDims.x, selDims.y, selDims.z]
+                        const sortedCur = [...cur].sort((a, b) => a - b)
+                        const sortedImp = [...s.importDims].sort((a, b) => a - b)
+                        if (sortedCur.every((v, i) => Math.abs(v - sortedImp[i]) <= 0.1))
+                          return null
+                        const f = cur.map((v) => sortedImp[sortedCur.indexOf(v)] / v)
+                        return (
+                          <button
+                            className="icon-btn"
+                            aria-label={t('resetSize', {
+                              x: s.importDims[0].toFixed(1),
+                              y: s.importDims[2].toFixed(1),
+                              z: s.importDims[1].toFixed(1)
+                            })}
+                            onClick={() => s.resizeModel(f[0], f[1], f[2], selectedId)}
+                          >
+                            <IconReset />
+                          </button>
+                        )
+                      })()}
+                    </div>
                     <div className="dim-row">
                       {PRINT_AXES.map(({ key, label, color }) => (
                         <DimField
@@ -1012,7 +1041,7 @@ export default function App() {
                         />
                       ))}
                     </div>
-                  </label>
+                  </div>
                   <label className="inline">
                     <input
                       type="checkbox"
@@ -1021,28 +1050,6 @@ export default function App() {
                     />
                     {t('uniform')}
                   </label>
-                  {(() => {
-                    // Reset to the size at import — orientation-invariant:
-                    // dims are matched by size RANK, so a rotated model gets
-                    // its scale back without being distorted across the
-                    // swapped axes. Shown only while the size actually
-                    // differs, on the uncut model.
-                    if (s.pieces.length !== 1 || !s.importDims || !selDims) return null
-                    const cur = [selDims.x, selDims.y, selDims.z]
-                    const sortedCur = [...cur].sort((a, b) => a - b)
-                    const sortedImp = [...s.importDims].sort((a, b) => a - b)
-                    if (sortedCur.every((v, i) => Math.abs(v - sortedImp[i]) <= 0.1)) return null
-                    const f = cur.map((v) => sortedImp[sortedCur.indexOf(v)] / v)
-                    return (
-                      <button onClick={() => s.resizeModel(f[0], f[1], f[2], selectedId)}>
-                        {t('resetSize', {
-                          x: s.importDims[0].toFixed(1),
-                          y: s.importDims[2].toFixed(1),
-                          z: s.importDims[1].toFixed(1)
-                        })}
-                      </button>
-                    )
-                  })()}
                   <label>
                     {t('rotation')}
                     {PRINT_AXES.map(({ key: axis, label, color }) => (
