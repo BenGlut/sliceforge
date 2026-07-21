@@ -9,6 +9,7 @@ import { AXIS_QUATS } from './geometry/plane.js'
 import { planeCutAsync, simplifyAsync, volumeCutAsync, pinPreviewAsync } from './geometry/cutClient.js'
 import { IconCut, IconBox, IconRotate, IconFaceDown, IconGrid, IconWand, IconLogo } from './icons.jsx'
 import { growRegion, regionPositions, regionOrientedBox } from './geometry/shapeSelect.js'
+import { reservationsCollide } from './geometry/collide.js'
 
 // One source of truth for the puzzle grid: the preview shows EXACTLY the
 // planes the generation will cut.
@@ -55,11 +56,34 @@ export default function App() {
   const [blockSize, setBlockSizeState] = useState({ x: 220, y: 220, z: 250 })
   const [busyMsg, setBusyMsg] = useState(null)
   const [pinPreviewOn, setPinPreviewOn] = useState(false)
+  const [puzzlePins, setPuzzlePins] = useState(null) // [{planeIdx, u, v, off}]
+  const puzzlePlanesRef = useRef([]) // posed planes matching planeIdx
 
   function clearPinPreview() {
     setPinPreviewOn(false)
+    setPuzzlePins(null)
     viewerRef.current?.setPinPreview(null)
     viewerRef.current?.setPiecesGhost(false)
+    if (viewerRef.current) viewerRef.current.puzzleEditMode = false
+  }
+
+  // World-space reservation segment for collision checks between connectors.
+  function pinReservation(planeIdx, u, v, off = 0) {
+    const plane = puzzlePlanesRef.current[planeIdx]
+    const p = useStore.getState().cutParams
+    const halfH = (p.pinLength + 2 * p.tolerance) / 2
+    const q = new THREE.Quaternion(...plane.quat)
+    const base = new THREE.Vector3(...plane.pos)
+    const toW = (z) => new THREE.Vector3(u, v, z).applyQuaternion(q).add(base).toArray()
+    return { a: toW(off - halfH), b: toW(off + halfH), r: p.pinDiameter / 2 + p.tolerance }
+  }
+
+  function collidesWithOthers(pins, selfIdx, planeIdx, u, v, off) {
+    const res = pinReservation(planeIdx, u, v, off)
+    return pins.some((pin, i) => {
+      if (i === selfIdx) return false
+      return reservationsCollide(res, pinReservation(pin.planeIdx, pin.u, pin.v, pin.off))
+    })
   }
 
   // Compute where the puzzle's connectors will land (same engine as the
@@ -79,12 +103,14 @@ export default function App() {
         pos[{ x: 0, y: 1, z: 2 }[axis]] = offset
         return { pos, quat: AXIS_QUATS[axis] }
       })
+      puzzlePlanesRef.current = planes
       const all = []
       for (const piece of st.pieces.filter((p) => p.visible)) {
         all.push(...(await pinPreviewAsync(piece.geometry, planes, st.cutParams)))
       }
-      viewerRef.current.setPinPreview(all, st.cutParams.pinDiameter, st.cutParams.pinLength)
+      setPuzzlePins(all.map(({ planeIdx, u, v, off }) => ({ planeIdx, u, v, off })))
       viewerRef.current.setPiecesGhost(true)
+      viewerRef.current.puzzleEditMode = true
       setPinPreviewOn(true)
     } catch (e) {
       console.error(e)
@@ -175,6 +201,27 @@ export default function App() {
         normal.normalize()
       )
       useStore.getState().setPlane({ pos: point.toArray(), quat: quat.toArray() })
+    }
+    // Editable puzzle connectors: add on plane click, remove on marker
+    // click, move by dragging — all collision-guarded.
+    viewer.onPuzzlePinAdd = (planeIdx, u, v) => {
+      setPuzzlePins((pins) => {
+        if (!pins) return pins
+        if (collidesWithOthers(pins, -1, planeIdx, u, v, 0)) return pins
+        return [...pins, { planeIdx, u, v, off: 0 }]
+      })
+    }
+    viewer.onPuzzlePinRemove = (idx) => {
+      setPuzzlePins((pins) => (pins ? pins.filter((_, i) => i !== idx) : pins))
+    }
+    viewer.onPuzzlePinMove = (idx, u, v) => {
+      setPuzzlePins((pins) => {
+        if (!pins) return pins
+        const pin = pins[idx]
+        if (!pin) return pins
+        if (collidesWithOthers(pins, idx, pin.planeIdx, u, v, pin.off ?? 0)) return [...pins]
+        return pins.map((q, i) => (i === idx ? { ...q, u, v } : q))
+      })
     }
     // Shape cut: grow a smooth region from the clicked triangle, bounded by
     // geodesic radius and creases, highlighted live (see runShapeSelection).
@@ -417,6 +464,26 @@ export default function App() {
     return () => viewer.setPuzzlePreview(null)
   }, [activeTool, blockSize, s.pieces])
 
+  // Render the orange markers from the editable pin list.
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer) return
+    if (!puzzlePins) {
+      viewer.setPinPreview(null)
+      return
+    }
+    const p = s.cutParams
+    const pins = puzzlePins.map(({ planeIdx, u, v, off }) => {
+      const plane = puzzlePlanesRef.current[planeIdx]
+      const q = new THREE.Quaternion(...plane.quat)
+      const center = new THREE.Vector3(u, v, off ?? 0)
+        .applyQuaternion(q)
+        .add(new THREE.Vector3(...plane.pos))
+      return { center: center.toArray(), quat: plane.quat, plane }
+    })
+    viewer.setPinPreview(pins, p.pinDiameter, p.pinLength)
+  }, [puzzlePins, s.cutParams.pinDiameter, s.cutParams.pinLength])
+
   async function onFiles(files) {
     const file = files?.[0]
     if (!file) return
@@ -522,9 +589,11 @@ export default function App() {
         pos[{ x: 0, y: 1, z: 2 }[axis]] = offset
         return { axis, offset, pos, quat: AXIS_QUATS[axis] }
       })
+      const edited = puzzlePins
       let current = s.pieces.filter((p) => p.visible)
       let done = 0
-      for (const plane of planes) {
+      for (let planeIdx = 0; planeIdx < planes.length; planeIdx++) {
+        const plane = planes[planeIdx]
         const next = []
         for (const piece of current) {
           if (!piece.geometry.boundingBox) piece.geometry.computeBoundingBox()
@@ -538,7 +607,9 @@ export default function App() {
           }
           const parts = await planeCutAsync(piece.geometry, plane, {
             ...s.cutParams,
-            manualPins: undefined
+            manualPins: edited
+              ? edited.filter((pin) => pin.planeIdx === planeIdx).map(({ u, v }) => [u, v])
+              : undefined
           })
           if (parts.length < 2) next.push(piece)
           else
@@ -1092,6 +1163,11 @@ export default function App() {
                 >
                   {t('previewPins')}
                 </button>
+                {pinPreviewOn && (
+                  <div className="dims">
+                    {t('pinsPlaced', { n: puzzlePins?.length ?? 0 })} — {t('pinsEditHint')}
+                  </div>
+                )}
                 <button className="primary" disabled={s.busy} onClick={onPuzzle}>
                   {s.busy ? busyMsg || t('cutting') : t('generate')}
                 </button>

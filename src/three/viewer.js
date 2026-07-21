@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { TransformControls } from 'three/addons/controls/TransformControls.js'
+import { AXIS_QUATS } from '../geometry/plane.js'
 
 export const PIECE_COLORS = [0x5b8dee, 0xee8a5b, 0x62c48a, 0xd46bc8, 0xe0c34f, 0x6bd4cf, 0x9a7be4]
 
@@ -67,6 +68,12 @@ export class Viewer {
     this.onPlanePick = null
     this.onPlaneChange = null
     this.onPinPick = null
+    this.onPuzzlePinAdd = null
+    this.onPuzzlePinRemove = null
+    this.onPuzzlePinMove = null
+    this.puzzleEditMode = false
+    this._dragPin = null
+    this._dragMoved = false
     this.faceMode = false
     this.shapeMode = false
     this.planeMode = false
@@ -75,8 +82,51 @@ export class Viewer {
     this._raycaster = new THREE.Raycaster()
     this._downPos = null
     canvas.addEventListener('pointerdown', (e) => {
-      if (e.button === 2) this._rDownPos = [e.clientX, e.clientY]
-      else this._downPos = [e.clientX, e.clientY]
+      if (e.button === 2) {
+        this._rDownPos = [e.clientX, e.clientY]
+        return
+      }
+      this._downPos = [e.clientX, e.clientY]
+      if (this.puzzleEditMode && this._pinPreviewGroup) {
+        const rect = canvas.getBoundingClientRect()
+        if (!rect.width || !rect.height) return
+        this._raycaster.setFromCamera(
+          new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1
+          ),
+          this.camera
+        )
+        const hit = this._raycaster.intersectObjects(this._pinPreviewGroup.children, false)[0]
+        if (hit) {
+          this._dragPin = hit.object
+          this._dragMoved = false
+          this.controls.enabled = false
+        }
+      }
+    })
+    canvas.addEventListener('pointermove', (e) => {
+      if (!this._dragPin) return
+      const rect = canvas.getBoundingClientRect()
+      if (!rect.width || !rect.height) return
+      this._raycaster.setFromCamera(
+        new THREE.Vector2(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1
+        ),
+        this.camera
+      )
+      const { pos, quat } = this._dragPin.userData.plane
+      const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(...quat))
+      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+        normal,
+        new THREE.Vector3(...pos)
+      )
+      const point = new THREE.Vector3()
+      if (this._raycaster.ray.intersectPlane(plane, point)) {
+        this._dragPin.position.copy(point)
+        this._dragMoved = true
+      }
     })
     // Right-CLICK (not a right-drag pan) opens the context menu.
     this.onContextMenu = null
@@ -89,6 +139,21 @@ export class Viewer {
     })
     canvas.addEventListener('pointerup', (e) => {
       if (e.button !== 0) return
+      if (this._dragPin) {
+        const pin = this._dragPin
+        this._dragPin = null
+        this.controls.enabled = true
+        const { pos, quat } = pin.userData.plane
+        if (this._dragMoved) {
+          const inv = new THREE.Quaternion(...quat).invert()
+          const local = pin.position.clone().sub(new THREE.Vector3(...pos)).applyQuaternion(inv)
+          this.onPuzzlePinMove?.(pin.userData.pinIdx, local.x, local.y)
+        } else {
+          this.onPuzzlePinRemove?.(pin.userData.pinIdx)
+        }
+        this._downPos = null
+        return
+      }
       const down = this._downPos
       this._downPos = null
       if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return
@@ -102,6 +167,16 @@ export class Viewer {
         ),
         this.camera
       )
+      if (this.puzzleEditMode && this._puzzleGroup) {
+        const hitQ = this._raycaster.intersectObjects(this._puzzleGroup.children, false)[0]
+        if (hitQ) {
+          const { planeIdx, pos, quat } = hitQ.object.userData
+          const inv = new THREE.Quaternion(...quat).invert()
+          const local = hitQ.point.clone().sub(new THREE.Vector3(...pos)).applyQuaternion(inv)
+          this.onPuzzlePinAdd?.(planeIdx, local.x, local.y)
+        }
+        return
+      }
       if (this.planeMode && this.planeGizmo?.dragging) return
       // Connector placement: clicks land on the plane quad, in plane-local mm.
       if (this.pinMode && this.planeObj?.visible) {
@@ -416,12 +491,14 @@ export class Viewer {
     const geo = new THREE.CylinderGeometry(pinDiameter / 2, pinDiameter / 2, pinLength, 24)
     const mat = new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.9 })
     const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0))
-    for (const pin of pins) {
+    pins.forEach((pin, i) => {
       const m = new THREE.Mesh(geo, mat)
       m.position.fromArray(pin.center)
       m.quaternion.fromArray(pin.quat).multiply(tilt)
+      m.userData.pinIdx = i
+      m.userData.plane = pin.plane ?? { pos: pin.center, quat: pin.quat }
       this._pinPreviewGroup.add(m)
-    }
+    })
   }
 
   // Puzzle preview: one translucent quad per upcoming grid cut, bounded to
@@ -445,9 +522,14 @@ export class Viewer {
     })
     const lineMat = new THREE.LineBasicMaterial({ color: 0x2f6bff, transparent: true, opacity: 0.6 })
     const edges = new THREE.EdgesGeometry(quad)
-    for (const { axis, offset } of planes) {
+    planes.forEach(({ axis, offset }, planeIdx) => {
       const m = new THREE.Mesh(quad, mat)
       m.add(new THREE.LineSegments(edges, lineMat))
+      const pos = [0, 0, 0]
+      pos[{ x: 0, y: 1, z: 2 }[axis]] = offset
+      m.userData.planeIdx = planeIdx
+      m.userData.pos = pos
+      m.userData.quat = AXIS_QUATS[axis]
       if (axis === 'x') {
         m.rotation.y = Math.PI / 2
         m.scale.set(size.z * 1.02, size.y * 1.02, 1)
@@ -461,7 +543,7 @@ export class Viewer {
         m.position.set(c.x, c.y, offset)
       }
       this._puzzleGroup.add(m)
-    }
+    })
   }
 
   // Connector markers live as children of the plane object, so they follow

@@ -108,6 +108,13 @@ Key invariants:
   volume < 0.05); if 50/50 leaks it slides to 30/70 then 70/30 (±0.2h), else
   the spot is dropped. previewPins() runs the SAME logic and feeds the orange
   ghost markers (Puzzle 'Show the connectors' button, pieces ghosted).
+- **Connectors never collide**: previewPins rejects cross-plane overlaps via
+  segment-distance reservations (collide.js, 1 mm clearance); at generation,
+  earlier holes void material so the containment test self-avoids them. The
+  puzzle preview is EDITABLE (puzzleEditMode): drag a marker to move it on
+  its plane, click it to remove, click a plane quad to add — all collision-
+  guarded in App state; Générer then uses the per-plane manual lists
+  (Array.isArray(manualPins): empty array = deliberately no pins).
 - Full undo/redo (⌘Z/⇧⌘Z/Ctrl+Y): `history`/`future` stacks of entries —
   {kind:'snapshot', pieces} for topology changes (cut/simplify/puzzle),
   {kind:'matrix', inverse} for in-place transforms (rotate/resize/scale/

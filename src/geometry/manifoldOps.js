@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import Module from 'manifold-3d'
 import { MeshoptSimplifier } from 'meshoptimizer'
 import { planeBasis } from './plane.js'
+import { reservationsCollide } from './collide.js'
 import { niceNormals } from './normals.js'
 
 let wasmPromise = null
@@ -113,7 +114,7 @@ function pinPlacements(wasm, solid, params) {
   const polys = section.toPolygons()
   section.delete()
   let spots
-  if (params.manualPins?.length) {
+  if (Array.isArray(params.manualPins)) {
     const outers = polys.filter((p) => polygonArea(p) > 0)
     const holes = polys.filter((p) => polygonArea(p) < 0)
     spots = params.manualPins.filter(
@@ -149,7 +150,11 @@ function pinPlacements(wasm, solid, params) {
 export async function previewPins(geometry, planes, params) {
   const wasm = await getWasm()
   const out = []
-  for (const plane of planes) {
+  const occupied = []
+  const r = Math.max(0.2, params.pinDiameter / 2) + Math.max(0, params.tolerance)
+  const halfH = (Math.max(1, params.pinLength) + 2 * Math.max(0, params.tolerance)) / 2
+  for (let planeIdx = 0; planeIdx < planes.length; planeIdx++) {
+    const plane = planes[planeIdx]
     const { origin } = planeBasis(plane)
     const q = new THREE.Quaternion(...plane.quat).invert()
     const toLocal = new THREE.Matrix4()
@@ -160,8 +165,15 @@ export async function previewPins(geometry, planes, params) {
     const solid = geometryToManifold(wasm, gLocal)
     gLocal.dispose()
     for (const [u, v, off] of pinPlacements(wasm, solid, params)) {
+      const a = new THREE.Vector3(u, v, off - halfH).applyMatrix4(toWorld)
+      const b = new THREE.Vector3(u, v, off + halfH).applyMatrix4(toWorld)
+      const res = { a: a.toArray(), b: b.toArray(), r }
+      // Connectors must NEVER hit each other — reject any reservation that
+      // would cross one already accepted on another plane.
+      if (occupied.some((o) => reservationsCollide(o, res))) continue
+      occupied.push(res)
       const center = new THREE.Vector3(u, v, off).applyMatrix4(toWorld)
-      out.push({ center: center.toArray(), quat: plane.quat })
+      out.push({ center: center.toArray(), quat: plane.quat, u, v, off, planeIdx })
     }
     solid.delete()
   }
