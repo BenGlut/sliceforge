@@ -126,8 +126,23 @@ export class Viewer {
         )
         const point = new THREE.Vector3()
         if (this._raycaster.ray.intersectPlane(plane, point)) {
-          this._dragPin.position.copy(point)
-          this._dragMoved = true
+          this._dragTried = true
+          const inv = new THREE.Quaternion(...quat).invert()
+          const local = point.clone().sub(new THREE.Vector3(...pos)).applyQuaternion(inv)
+          const ok =
+            this.puzzlePinValidator?.(
+              this._dragPin.userData.pinIdx,
+              this._dragPin.userData.planeIdx,
+              local.x,
+              local.y
+            ) ?? true
+          // Hard stop at the valid-zone boundary: the marker only follows
+          // the cursor while the position stays legal.
+          if (ok) {
+            this._dragPin.position.copy(point)
+            this._dragLast = [local.x, local.y]
+            this._dragMoved = true
+          }
         }
         return
       }
@@ -174,14 +189,14 @@ export class Viewer {
         const pin = this._dragPin
         this._dragPin = null
         this.controls.enabled = true
-        const { pos, quat } = pin.userData.plane
-        if (this._dragMoved) {
-          const inv = new THREE.Quaternion(...quat).invert()
-          const local = pin.position.clone().sub(new THREE.Vector3(...pos)).applyQuaternion(inv)
-          this.onPuzzlePinMove?.(pin.userData.pinIdx, local.x, local.y)
-        } else {
+        if (this._dragMoved && this._dragLast) {
+          this.onPuzzlePinMove?.(pin.userData.pinIdx, this._dragLast[0], this._dragLast[1])
+        } else if (!this._dragTried) {
+          // A clean click (no drag attempt at all) removes the connector.
           this.onPuzzlePinRemove?.(pin.userData.pinIdx)
         }
+        this._dragTried = false
+        this._dragLast = null
         this._downPos = null
         return
       }
@@ -550,6 +565,7 @@ export class Viewer {
       m.position.fromArray(pin.center)
       m.quaternion.fromArray(pin.quat).multiply(tilt)
       m.userData.pinIdx = i
+      m.userData.planeIdx = pin.planeIdx
       m.userData.plane = pin.plane ?? { pos: pin.center, quat: pin.quat }
       this._pinPreviewGroup.add(m)
     })

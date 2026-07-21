@@ -9,7 +9,7 @@ import { AXIS_QUATS } from './geometry/plane.js'
 import { planeCutAsync, simplifyAsync, volumeCutAsync, pinPreviewAsync } from './geometry/cutClient.js'
 import { IconCut, IconBox, IconRotate, IconFaceDown, IconGrid, IconWand, IconLogo } from './icons.jsx'
 import { growRegion, regionPositions, regionOrientedBox } from './geometry/shapeSelect.js'
-import { reservationsCollide } from './geometry/collide.js'
+import { reservationsCollide, pinFits2D } from './geometry/collide.js'
 
 // One source of truth for the puzzle grid: the preview shows EXACTLY the
 // planes the generation will cut.
@@ -58,6 +58,8 @@ export default function App() {
   const [pinPreviewOn, setPinPreviewOn] = useState(false)
   const [puzzlePins, setPuzzlePins] = useState(null) // [{planeIdx, u, v, off}]
   const puzzlePlanesRef = useRef([]) // posed planes matching planeIdx
+  const puzzleSectionsRef = useRef([]) // per-plane cross-section polygons
+  const puzzlePinsRef = useRef(null)
 
   function clearPinPreview() {
     setPinPreviewOn(false)
@@ -76,6 +78,13 @@ export default function App() {
     const base = new THREE.Vector3(...plane.pos)
     const toW = (z) => new THREE.Vector3(u, v, z).applyQuaternion(q).add(base).toArray()
     return { a: toW(off - halfH), b: toW(off + halfH), r: p.pinDiameter / 2 + p.tolerance }
+  }
+
+  function pinValid2D(planeIdx, u, v) {
+    const polys = puzzleSectionsRef.current[planeIdx]
+    if (!polys?.length) return false
+    const p = useStore.getState().cutParams
+    return pinFits2D(polys, u, v, p.pinDiameter / 2 + p.tolerance + 1.5)
   }
 
   function collidesWithOthers(pins, selfIdx, planeIdx, u, v, off) {
@@ -105,9 +114,15 @@ export default function App() {
       })
       puzzlePlanesRef.current = planes
       const all = []
+      const sections = []
       for (const piece of st.pieces.filter((p) => p.visible)) {
-        all.push(...(await pinPreviewAsync(piece.geometry, planes, st.cutParams)))
+        const res = await pinPreviewAsync(piece.geometry, planes, st.cutParams)
+        all.push(...res.pins)
+        res.sections.forEach((polys, i) => {
+          sections[i] = [...(sections[i] ?? []), ...(polys ?? [])]
+        })
       }
+      puzzleSectionsRef.current = sections
       setPuzzlePins(all.map(({ planeIdx, u, v, off }) => ({ planeIdx, u, v, off })))
       viewerRef.current.setPiecesGhost(true)
       viewerRef.current.puzzleEditMode = true
@@ -207,9 +222,19 @@ export default function App() {
     viewer.onPuzzlePinAdd = (planeIdx, u, v) => {
       setPuzzlePins((pins) => {
         if (!pins) return pins
+        if (!pinValid2D(planeIdx, u, v)) return pins
         if (collidesWithOthers(pins, -1, planeIdx, u, v, 0)) return pins
         return [...pins, { planeIdx, u, v, off: 0 }]
       })
+    }
+    // Live drag constraint: the marker only follows while inside the
+    // material (2D section + wall margin) and away from other connectors.
+    viewer.puzzlePinValidator = (pinIdx, planeIdx, u, v) => {
+      if (!pinValid2D(planeIdx, u, v)) return false
+      const pins = puzzlePinsRef.current
+      if (!pins) return true
+      const pin = pins[pinIdx]
+      return !collidesWithOthers(pins, pinIdx, planeIdx, u, v, pin?.off ?? 0)
     }
     viewer.onPuzzlePinRemove = (idx) => {
       setPuzzlePins((pins) => (pins ? pins.filter((_, i) => i !== idx) : pins))
@@ -228,7 +253,10 @@ export default function App() {
     viewer.onShapePick = (faceIndex, pieceId) => {
       shapePickRef.current?.(faceIndex, pieceId)
     }
-    if (import.meta.env.DEV) window.__sfViewer = viewer
+    if (import.meta.env.DEV) {
+      window.__sfViewer = viewer
+      window.__sfDebug = { planes: puzzlePlanesRef, sections: puzzleSectionsRef, pins: puzzlePinsRef }
+    }
     viewerRef.current = viewer
   }, [])
 
@@ -479,10 +507,14 @@ export default function App() {
       const center = new THREE.Vector3(u, v, off ?? 0)
         .applyQuaternion(q)
         .add(new THREE.Vector3(...plane.pos))
-      return { center: center.toArray(), quat: plane.quat, plane }
+      return { center: center.toArray(), quat: plane.quat, plane, planeIdx }
     })
     viewer.setPinPreview(pins, p.pinDiameter, p.pinLength)
   }, [puzzlePins, s.cutParams.pinDiameter, s.cutParams.pinLength])
+
+  useEffect(() => {
+    puzzlePinsRef.current = puzzlePins
+  }, [puzzlePins])
 
   async function onFiles(files) {
     const file = files?.[0]

@@ -150,6 +150,7 @@ function pinPlacements(wasm, solid, params) {
 export async function previewPins(geometry, planes, params) {
   const wasm = await getWasm()
   const out = []
+  const sections = []
   const occupied = []
   const r = Math.max(0.2, params.pinDiameter / 2) + Math.max(0, params.tolerance)
   const halfH = (Math.max(1, params.pinLength) + 2 * Math.max(0, params.tolerance)) / 2
@@ -164,6 +165,9 @@ export async function previewPins(geometry, planes, params) {
     const gLocal = geometry.clone().applyMatrix4(toLocal)
     const solid = geometryToManifold(wasm, gLocal)
     gLocal.dispose()
+    const sec = solid.slice(0)
+    sections[planeIdx] = sec.toPolygons().map((poly) => poly.map(([a, b]) => [a, b]))
+    sec.delete()
     for (const [u, v, off] of pinPlacements(wasm, solid, params)) {
       const a = new THREE.Vector3(u, v, off - halfH).applyMatrix4(toWorld)
       const b = new THREE.Vector3(u, v, off + halfH).applyMatrix4(toWorld)
@@ -177,7 +181,7 @@ export async function previewPins(geometry, planes, params) {
     }
     solid.delete()
   }
-  return out
+  return { pins: out, sections }
 }
 
 // Tool solids (pins, cutting boxes) meeting a colored model in a boolean:

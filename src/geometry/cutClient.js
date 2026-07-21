@@ -67,5 +67,5 @@ export async function pinPreviewAsync(geometry, planes, params) {
     [positions.buffer, index?.buffer].filter(Boolean)
   )
   const res = await promise
-  return res.plain ?? []
+  return res.plain ?? { pins: [], sections: [] }
 }

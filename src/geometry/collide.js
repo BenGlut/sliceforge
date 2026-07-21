@@ -43,3 +43,39 @@ export const PIN_CLEARANCE = 1
 export function reservationsCollide(r1, r2) {
   return segmentDistance(r1.a, r1.b, r2.a, r2.b) < r1.r + r2.r + PIN_CLEARANCE
 }
+
+// --- 2D cross-section membership (plane-local coords) ---
+export function polygonArea(poly) {
+  let a = 0
+  for (let i = 0; i < poly.length; i++) {
+    const [x1, y1] = poly[i]
+    const [x2, y2] = poly[(i + 1) % poly.length]
+    a += x1 * y2 - x2 * y1
+  }
+  return a / 2
+}
+
+export function pointInPolygon([px, py], poly) {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i]
+    const [xj, yj] = poly[j]
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside
+  }
+  return inside
+}
+
+// A pin of footprint `margin` fits at (u,v) inside the section polygons:
+// centre + an 8-point ring must be in an outer loop and out of every hole.
+export function pinFits2D(polys, u, v, margin) {
+  const outers = polys.filter((p) => polygonArea(p) > 0)
+  const holes = polys.filter((p) => polygonArea(p) < 0)
+  const inside = (pt) =>
+    outers.some((o) => pointInPolygon(pt, o)) && !holes.some((h) => pointInPolygon(pt, h))
+  if (!inside([u, v])) return false
+  for (let k = 0; k < 8; k++) {
+    const a = (k * Math.PI) / 4
+    if (!inside([u + margin * Math.cos(a), v + margin * Math.sin(a)])) return false
+  }
+  return true
+}

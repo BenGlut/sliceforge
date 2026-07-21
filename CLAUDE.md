@@ -118,7 +118,11 @@ Key invariants:
   affordances in edit mode: connector under cursor lights up (ffe08a,
   cursor:pointer), otherwise the plane a click would add to brightens
   (opacity .3, cursor:copy) — _setHoverPin/_setHoverQuad swap shared base/
-  hover materials, cleared on rebuilds.
+  hover materials, cleared on rebuilds. Dragging is LIVE-CONSTRAINED: the
+  marker follows only while puzzlePinValidator passes (2D section fit with
+  wall margin from per-plane polygons returned by previewPins + collision
+  check) — it hard-stops at the valid-zone boundary; a drag attempt that
+  never found a valid spot cancels instead of deleting.
 - Full undo/redo (⌘Z/⇧⌘Z/Ctrl+Y): `history`/`future` stacks of entries —
   {kind:'snapshot', pieces} for topology changes (cut/simplify/puzzle),
   {kind:'matrix', inverse} for in-place transforms (rotate/resize/scale/
