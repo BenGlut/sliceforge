@@ -81,8 +81,16 @@ Key invariants:
 - **Design system (Apple/BambuLab-inspired)**: tokens in `:root` of
   `src/style.css` (surfaces, `--accent` #2f6bff, radii, shadows) — always use
   tokens, never raw colors. Floating glass panels (blur) over the viewport,
-  pill toolbar, segmented controls (`.axis-row`), custom sliders. Piece colors
+  segmented controls (`.axis-row`), custom sliders. Piece colors
   come from `PIECE_COLORS` (viewer.js) and are echoed as dots in the list.
+- **Orca-style vertical toolbar**: the tool buttons are a slicer-style vertical
+  column of 44 px square icon buttons on the viewport's left edge
+  (`.viewport-toolbar`), label as a side flyout on hover (`.tool-label`,
+  opacity 0→1, pointer-events none), shortcut badge (`.kbd`) in the button's
+  bottom-right corner. Never revert to a horizontal pill bar — icons must
+  never collide with the side panel at any width. The Modèle sidebar section
+  is collapsible (`h3.collapsible` + chevron), auto-collapsed when a tool
+  opens, reopenable by click.
 - **Icons**: inline SVG components in `src/icons.jsx` (stroke, currentColor).
   NO emoji anywhere in the UI.
 - **Tool-based UI (CAD standard)**: plane helper, volume box and rotation
@@ -157,8 +165,8 @@ destructive re-Générer bug + dead defaults; round 2 found the FR toolbar
 buried under the panel at 1280px. Fixes shipped: regenerate-from-source
 (puzzleSourceRef), smart block-size defaults, Modèle collapsed while a tool
 is open, tool auto-closes + camera refits after generation, sorted unique
-piece names, checked-only exports with live count + disabled state, toolbar
-wraps under 340px-reserved width (labels never hidden), per-tool hint lines,
+piece names, checked-only exports with live count + disabled state, the
+Orca-style vertical toolbar (supersedes the round-2 wrap fix), per-tool hint lines,
 connector wording unified (jeu d'ajustement, distance entre connecteurs,
 Largeur for square/hex).
 

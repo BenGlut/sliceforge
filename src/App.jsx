@@ -81,6 +81,7 @@ export default function App() {
   const viewerRef = useRef(null)
   const fileRef = useRef(null)
   const [uniformScale, setUniformScale] = useState(true)
+  const [modelOpen, setModelOpen] = useState(true)
 
   // CAD-style tooling: gizmos belong to an active tool, nothing is shown by
   // default. Esc leaves the tool.
@@ -510,6 +511,7 @@ export default function App() {
       setPinPlacing(false)
       setManualPins([])
     }
+    setModelOpen(!activeTool)
     // Opening the puzzle on a model smaller than the default blocks would
     // yield "1 block" and feel broken — propose sizes that actually split.
     if (activeTool === 'puzzle' && dims) {
@@ -913,7 +915,10 @@ export default function App() {
         {s.pieces.length > 0 && (
           <aside>
             <section>
-              <h3>{t('model')}</h3>
+              <h3 className="collapsible" onClick={() => setModelOpen((v) => !v)}>
+                {t('model')}
+                <span className={`chevron${modelOpen ? '' : ' closed'}`}>▾</span>
+              </h3>
               {dims && (
                 <div className="dims">
                   {t('dims', {
@@ -929,7 +934,7 @@ export default function App() {
                   <button onClick={() => s.scaleModel(1000)}>{t('scaleToMm')}</button>
                 </div>
               )}
-              {!activeTool && (<>
+              {modelOpen && (<>
               <label>
                 {t('dimensions')}
                 <div className="dim-row">
