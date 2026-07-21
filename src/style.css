@@ -83,6 +83,8 @@ button.lang:hover { color: var(--text); background: var(--field); }
 .viewport-toolbar {
   position: absolute; top: 16px; left: 16px;
   display: flex; gap: 8px;
+  flex-wrap: wrap;
+  max-width: calc(100% - 340px); /* never slide under the side panel */
 }
 .viewport-toolbar button {
   display: flex; align-items: center; gap: 8px;
@@ -127,9 +129,8 @@ button.lang:hover { color: var(--text); background: var(--field); }
   padding: 0 4px; line-height: 15px; margin-left: 2px;
 }
 .viewport-toolbar button.active .kbd { color: rgba(255, 255, 255, 0.75); border-color: rgba(255, 255, 255, 0.35); }
-@media (max-width: 1180px) {
-  .viewport-toolbar .tool-label, .viewport-toolbar .kbd { display: none; }
-}
+/* Labels stay visible at all widths — the toolbar wraps instead of hiding
+   its meaning behind cryptic icons. */
 
 /* Busy: glass chip with spinner */
 .busy {

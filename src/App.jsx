@@ -97,6 +97,7 @@ export default function App() {
   const puzzlePlanesRef = useRef([]) // posed planes matching planeIdx
   const puzzleSectionsRef = useRef([]) // per-plane cross-section polygons
   const puzzlePinsRef = useRef(null)
+  const puzzleSourceRef = useRef(null) // { pieces, ids } — regenerate from the original
 
   function clearPinPreview() {
     setPinPreviewOn(false)
@@ -509,6 +510,21 @@ export default function App() {
       setPinPlacing(false)
       setManualPins([])
     }
+    // Opening the puzzle on a model smaller than the default blocks would
+    // yield "1 block" and feel broken — propose sizes that actually split.
+    if (activeTool === 'puzzle' && dims) {
+      const est =
+        Math.ceil(dims.x / Math.max(1, blockSize.x)) *
+        Math.ceil(dims.y / Math.max(1, blockSize.y)) *
+        Math.ceil(dims.z / Math.max(1, blockSize.z))
+      if (est <= 1) {
+        setBlockSizeState({
+          x: Math.max(10, Math.ceil(dims.x / 2 / 5) * 5),
+          y: Math.max(10, Math.ceil(dims.y / 2 / 5) * 5),
+          z: Math.max(10, Math.ceil(dims.z / 2 / 5) * 5)
+        })
+      }
+    }
   }, [activeTool])
 
   // Live preview of the puzzle grid while the tool is open.
@@ -695,8 +711,19 @@ export default function App() {
         return { axis, offset, pos, quat: AXIS_QUATS[axis] }
       })
       const edited = puzzlePins
-      const kept = s.pieces.filter((p) => !p.visible || isDowelPiece(p))
-      let current = s.pieces.filter((p) => p.visible && !isDowelPiece(p))
+      const targets = s.pieces.filter((p) => p.visible && !isDowelPiece(p))
+      let kept = s.pieces.filter((p) => !p.visible || isDowelPiece(p))
+      let current = targets
+      // Re-clicking Générer must REGENERATE, never re-cut the previous blocks:
+      // if the targets are exactly the last generation, restart from the
+      // saved source and drop the previous dowel piece.
+      const src = puzzleSourceRef.current
+      if (src && targets.length && targets.every((p) => src.ids?.has(p.id))) {
+        current = src.pieces
+        kept = kept.filter((p) => !isDowelPiece(p))
+      } else {
+        puzzleSourceRef.current = { pieces: targets, ids: null }
+      }
       let done = 0
       let dowels = 0
       for (let planeIdx = 0; planeIdx < planes.length; planeIdx++) {
@@ -743,9 +770,12 @@ export default function App() {
           e.p.name = `${base}_${String(i + 1).padStart(2, '0')}`
         })
       useStore.getState().setPiecesBulk([...kept, ...current])
+      puzzleSourceRef.current.ids = new Set(current.map((p) => p.id))
       addDowelPiece(dowels)
       clearPinPreview()
       revealCut()
+      viewerRef.current?.fitCamera?.()
+      setActiveTool(null)
     } catch (e) {
       console.error(e)
       s.setError(t('cutError'))
@@ -803,15 +833,18 @@ export default function App() {
             e.target.value = ''
           }}
         />
-        {s.pieces.length > 0 && (
-          <div className="export-group">
-            <span>{t('export')}:</span>
-            <button onClick={() => exportSTL(s.pieces, s.modelName)}>STL</button>
-            <button onClick={() => export3MF(s.pieces, s.modelName)}>3MF</button>
-            <button onClick={() => exportOBJ(s.pieces, s.modelName)}>OBJ</button>
-            <button onClick={() => exportGLB(s.pieces, s.modelName)}>GLB</button>
-          </div>
-        )}
+        {s.pieces.length > 0 && (() => {
+          const checked = s.pieces.filter((p) => p.visible)
+          return (
+            <div className="export-group">
+              <span>{t('export')} · {checked.length} :</span>
+              <button disabled={!checked.length} onClick={() => exportSTL(checked, s.modelName)}>STL</button>
+              <button disabled={!checked.length} onClick={() => export3MF(checked, s.modelName)}>3MF</button>
+              <button disabled={!checked.length} onClick={() => exportOBJ(checked, s.modelName)}>OBJ</button>
+              <button disabled={!checked.length} onClick={() => exportGLB(checked, s.modelName)}>GLB</button>
+            </div>
+          )
+        })()}
         <span className="spacer" />
         <button className="lang" onClick={() => s.setLang(s.lang === 'fr' ? 'en' : 'fr')}>
           {s.lang === 'fr' ? 'EN' : 'FR'}
@@ -896,6 +929,7 @@ export default function App() {
                   <button onClick={() => s.scaleModel(1000)}>{t('scaleToMm')}</button>
                 </div>
               )}
+              {!activeTool && (<>
               <label>
                 {t('dimensions')}
                 <div className="dim-row">
@@ -956,6 +990,7 @@ export default function App() {
                   </div>
                 ))}
               </label>
+              </>)}
             </section>
 
             {activeTool === 'plane' && (
@@ -1024,7 +1059,7 @@ export default function App() {
               {s.cutParams.pins && (
                 <>
                   <label>
-                    {t('pinDiameter')}
+                    {t(['square', 'hex'].includes(s.cutParams.connectorType) ? 'pinWidth' : 'pinDiameter')}
                     <input
                       type="number"
                       min="1"
@@ -1053,6 +1088,7 @@ export default function App() {
                       onChange={(e) => s.setCutParams({ tolerance: +e.target.value })}
                     />
                   </label>
+                  <div className="dims">{t('toleranceHint')}</div>
                   <label>
                     {t('spacing')}
                     <input
@@ -1135,6 +1171,20 @@ export default function App() {
               </section>
             )}
 
+            {activeTool === 'face' && (
+              <section>
+                <h3>{t('placeFace')}</h3>
+                <div className="dims">{t('faceHint')}</div>
+              </section>
+            )}
+
+            {activeTool === 'rotate' && (
+              <section>
+                <h3>{t('modeRotate')}</h3>
+                <div className="dims">{t('rotateHint')}</div>
+              </section>
+            )}
+
             {activeTool === 'shape' && (
               <section>
                 <h3>{t('shapeCut')}</h3>
@@ -1193,6 +1243,7 @@ export default function App() {
                     ))}
                   </div>
                 </label>
+                <div className="dims">{t('blockSizeHint')}</div>
                 {dims && (
                   <div className="dims">
                     {t('blocksEstimate', {
@@ -1223,7 +1274,7 @@ export default function App() {
                   </div>
                 </label>
                 <label>
-                  {t('pinDiameter')}
+                  {t(['square', 'hex'].includes(s.cutParams.connectorType) ? 'pinWidth' : 'pinDiameter')}
                   <input
                     type="number"
                     min="1"
@@ -1267,12 +1318,15 @@ export default function App() {
                   disabled={s.busy}
                   onClick={() => (pinPreviewOn ? clearPinPreview() : onPreviewPins())}
                 >
-                  {t('previewPins')}
+                  {pinPreviewOn ? t('hidePins') : t('previewPins')}
                 </button>
                 {pinPreviewOn && (
-                  <div className="dims">
-                    {t('pinsPlaced', { n: puzzlePins?.length ?? 0 })} — {t('pinsEditHint')}
-                  </div>
+                  <>
+                    <div className="dims">{t('pinsPlaced', { n: puzzlePins?.length ?? 0 })}</div>
+                    <div className="dims">{t('hintMove')}</div>
+                    <div className="dims">{t('hintRemove')}</div>
+                    <div className="dims">{t('hintAdd')}</div>
+                  </>
                 )}
                 <button className="primary" disabled={s.busy} onClick={onPuzzle}>
                   {s.busy ? busyMsg || t('cutting') : t('generate')}
@@ -1295,7 +1349,10 @@ export default function App() {
                 </div>
               )}
               <ul className="pieces">
-                {s.pieces.map((p, i) => (
+                {[...s.pieces]
+                  .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+                  .map((p) => ({ p, i: s.pieces.indexOf(p) }))
+                  .map(({ p, i }) => (
                   <li key={p.id} className={p.id === selectedId ? 'selected' : ''}>
                     <label className="inline">
                       <input

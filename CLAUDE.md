@@ -148,6 +148,20 @@ tris and scaled to 180 mm (3.8 MB), auto-loaded at startup (best-effort fetch
 in App.jsx; never overrides a user import). Regenerate from the full-res
 source in ~/Downloads with the simplifyGeometry pipeline if the mascot evolves.
 
+## Independent UX audits (owner-mandated protocol)
+
+Periodically spawn a FRESH general-purpose agent with zero context (no code
+reading allowed) as a 'home machine' persona to audit the UI/UX on the dev
+server, several rounds with a new agent each time. Round 1 found the
+destructive re-Générer bug + dead defaults; round 2 found the FR toolbar
+buried under the panel at 1280px. Fixes shipped: regenerate-from-source
+(puzzleSourceRef), smart block-size defaults, Modèle collapsed while a tool
+is open, tool auto-closes + camera refits after generation, sorted unique
+piece names, checked-only exports with live count + disabled state, toolbar
+wraps under 340px-reserved width (labels never hidden), per-tool hint lines,
+connector wording unified (jeu d'ajustement, distance entre connecteurs,
+Largeur for square/hex).
+
 ## Testing recipes
 
 > Packaged as personal skills: invoke `/sliceforge-verify` (test harness) and
